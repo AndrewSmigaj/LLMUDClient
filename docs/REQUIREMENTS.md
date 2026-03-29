@@ -4,33 +4,42 @@
 
 ---
 
+## Phase 1 Must Requirements (Quick Reference)
+
+FR-NET-01, FR-NET-02, FR-NET-04, FR-NET-05, FR-NET-06, FR-UI-01, FR-UI-02, FR-UI-03, FR-UI-04, FR-PARSE-01, FR-PARSE-02, FR-PARSE-03, FR-PARSE-04, FR-PARSE-05, FR-LLM-01, FR-LLM-02, FR-LLM-03, FR-LLM-04, FR-LLM-05, FR-COG-01, FR-COG-02, FR-COG-03, FR-COG-04, FR-COG-06, FR-GOAL-01, FR-GOAL-02, FR-GOAL-03, FR-MEM-01, FR-MEM-02, FR-MEM-03, FR-MEM-04, FR-MEM-05, FR-KNOW-01, FR-SCENE-01, FR-SCENE-02, FR-SCAFFOLD-01, FR-SCAFFOLD-02, FR-SCAFFOLD-03, FR-SCAFFOLD-04, FR-CMD-01, FR-CMD-02, FR-CMD-03, FR-CMD-04, FR-CMD-05, FR-ACTION-01, FR-ACTION-02, FR-ACTION-04, FR-INT-01, FR-INT-02, FR-INT-03
+
+*Source: AI_SYSTEM_DESIGN.md §The Loop, §Scaffolds, §Tools, §Infrastructure; ARCHITECTURE.md §Module Structure*
+
+---
+
 ## Functional Requirements
 
 ### FR-NET: Networking & Connection
 
 | ID | Requirement | Priority | Phase |
 |----|------------|----------|-------|
-| FR-NET-01 | Connect to any MUD via telnet (host:port) | Must | 1 |
+| FR-NET-01 | Agent connects to Evennia via telnet (telnetlib3, async) | Must | 1 |
 | FR-NET-02 | Handle telnet protocol negotiation (IAC, NAWS, etc.) | Must | 1 |
 | FR-NET-03 | Support GMCP protocol for structured game data | Should | 2 |
-| FR-NET-04 | Support MSDP protocol for structured game data | Could | 3 |
-| FR-NET-05 | Handle connection drops and reconnection | Must | 1 |
-| FR-NET-06 | Support SSL/TLS connections | Should | 2 |
+| FR-NET-04 | Handle connection drops and reconnection with backoff | Must | 1 |
+| FR-NET-05 | Users connect via WebSocket to React frontend (single multiplexed connection) | Must | 1 |
+| FR-NET-06 | WebSocket streams: MUD output, analysis channel, coordinates, room context, agent status | Must | 1 |
+| FR-NET-07 | Coordinate relay on server broadcasts residual stream coordinates to clients | Should | 2 |
 
-### FR-TUI: Terminal User Interface
+### FR-UI: User Interface (React + xterm.js)
 
 | ID | Requirement | Priority | Phase |
 |----|------------|----------|-------|
-| FR-TUI-01 | Three-pane layout: MUD output, command input, LLM panel | Must | 1 |
-| FR-TUI-02 | MUD output pane with scrollback buffer | Must | 1 |
-| FR-TUI-03 | Command input with history (up/down arrow) | Must | 1 |
-| FR-TUI-04 | LLM panel showing: current state, active goals, suggestions, reasoning | Must | 1 |
-| FR-TUI-05 | Approval dialog: accept/reject/retry/edit for LLM actions | Must | 1 |
-| FR-TUI-06 | ANSI color rendering in MUD output | Must | 1 |
-| FR-TUI-07 | Slash command support in input (/ask, /suggest, etc.) | Must | 1 |
-| FR-TUI-08 | Map visualization pane (ASCII or graphical) | Should | 3 |
-| FR-TUI-09 | Resizable/configurable pane layout | Could | 3 |
-| FR-TUI-10 | Status bar showing connection state, HP, active mode | Should | 1 |
+| FR-UI-01 | MUD terminal panel (xterm.js) with ANSI color rendering | Must | 1 |
+| FR-UI-02 | Analysis channel panel showing agent chain-of-thought | Must | 1 |
+| FR-UI-03 | Agent controls: start/stop, autonomy level, reasoning effort | Must | 1 |
+| FR-UI-04 | Scaffold browser: list, view, edit scaffolds | Must | 1 |
+| FR-UI-05 | Goal viewer showing active goals document | Should | 1 |
+| FR-UI-06 | Proposal review panel: approve/reject/edit REM proposals | Should | 2 |
+| FR-UI-07 | ConceptMRI visualization panels (existing, extended with live feeds) | Must | 1 |
+| FR-UI-08 | Local analysis mode: load datasets, run probes, visualize (existing ConceptMRI) | Must | 1 |
+| FR-UI-09 | Institute mode: connect to Evennia, room entry triggers viz context switch | Should | 2 |
+| FR-UI-10 | MUD creator panel (host only, disabled by config) | Could | 3 |
 
 ### FR-PARSE: MUD Output Parsing
 
@@ -48,29 +57,26 @@
 
 | ID | Requirement | Priority | Phase |
 |----|------------|----------|-------|
-| FR-LLM-01 | Support local models via OpenAI-compatible API (Ollama, LMStudio) | Must | 1 |
-| FR-LLM-02 | Support Anthropic Claude API | Should | 1 |
-| FR-LLM-03 | Support OpenAI API | Should | 2 |
-| FR-LLM-04 | Per-task model routing (different model/reasoning for perception vs. tactics vs. RP) | Must | 1 |
-| FR-LLM-05 | Custom grammar support for local models (GBNF/JSON schema constraints) | Should | 2 |
-| FR-LLM-06 | Native tool calling for API models | Must | 1 |
-| FR-LLM-07 | Streaming response support | Should | 2 |
-| FR-LLM-08 | Token usage tracking and reporting | Should | 2 |
-| FR-LLM-09 | Fallback provider if primary is unavailable | Could | 3 |
-| FR-LLM-10 | ClaudeCodeProvider: `claude -p` subprocess wrapper for offline analysis (subscription tokens, not API credits) | Must | 2 |
-| FR-LLM-11 | MCP server exposing game state, memories, scaffolds, session logs to Claude Code | Must | 2 |
+| FR-LLM-01 | Em-OSS-20b via ConceptMRI inference server (PyTorch hooks for residual stream capture) | Must | 1 |
+| FR-LLM-02 | Harmony response format: analysis, commentary, final channels parsed separately | Must | 1 |
+| FR-LLM-03 | Configurable reasoning effort (low/medium/high) via system prompt | Must | 1 |
+| FR-LLM-04 | Per-task reasoning routing: assess (low), plan+act routine (medium), plan+act complex (high) | Must | 1 |
+| FR-LLM-05 | Native tool calling and structured output | Must | 1 |
+| FR-LLM-06 | Fallback to Ollama if ConceptMRI server unreachable (no coordinates, alert user) | Should | 2 |
+| FR-LLM-07 | Token usage tracking and reporting | Should | 2 |
+| FR-LLM-08 | Claude Code offline reflection: `claude -p` reads log files directly from disk | Must | 2 |
+| FR-LLM-09 | Future upgrade path: gpt-oss-120b or API model for reasoning role | Could | 3 |
 
 ### FR-COG: Cognitive Architecture
 
 | ID | Requirement | Priority | Phase |
 |----|------------|----------|-------|
-| FR-COG-01 | Fast/slow processing split — cheap filtering, expensive reasoning | Must | 1 |
-| FR-COG-02 | Novelty detection: trigger slow processing for novel/complex situations | Must | 1 |
-| FR-COG-03 | Automatic reflexes: configurable auto-heal, auto-loot, etc. | Must | 1 |
-| FR-COG-04 | Prompted deliberation for complex decisions | Must | 1 |
-| FR-COG-05 | Context assembly: compose prompts from state + goals + guides + memory | Must | 1 |
-| FR-COG-06 | Context overflow management when many things are relevant | Should | 2 |
-| FR-COG-07 | Event bus: central async pub/sub for all significant system events | Must | 1 |
+| FR-COG-01 | Four-phase loop: Assess → Plan → Act → Learn | Must | 1 |
+| FR-COG-02 | Assess scaffold determines reasoning depth: routine vs. complex | Must | 1 |
+| FR-COG-03 | Context assembly: system prompt + game state + goals + scaffolds + memories + tools | Must | 1 |
+| FR-COG-04 | Scaffold-driven behavior: each phase guided by loaded scaffolds | Must | 1 |
+| FR-COG-05 | Context priority ordering with defined drop policy (least-relevant scaffolds first, oldest memories first) | Should | 2 |
+| FR-COG-06 | Event bus: central async pub/sub for all significant system events (Pydantic models, logged to SQLite) | Must | 1 |
 
 ### FR-GOAL: Goal Management
 
@@ -79,7 +85,7 @@
 | FR-GOAL-01 | Persistent goal document (text file) readable/writable by LLM | Must | 1 |
 | FR-GOAL-02 | Goal process scaffold guiding prioritization and decomposition | Must | 1 |
 | FR-GOAL-03 | Stuckness detection and recovery guidance | Must | 1 |
-| FR-GOAL-04 | Goal document displayed in TUI | Should | 1 |
+| FR-GOAL-04 | Goal document displayed in UI (GoalViewer component) | Should | 1 |
 | FR-GOAL-05 | Goal history tracking (completed goals log) | Should | 2 |
 
 ### FR-MEM: Memory System
@@ -125,7 +131,7 @@
 | FR-REFL-05 | Meta-review scaffold (review the scaffolds themselves) | Should | 2 |
 | FR-REFL-06 | Multi-perspective review (MAR-style) | Could | 3 |
 | FR-REFL-07 | Automated REM scheduling (daily/weekly offline analysis) | Could | 4 |
-| FR-REFL-08 | Reflection via Claude Code skills (manual invocation first, TUI trigger later) | Should | 2 |
+| FR-REFL-08 | Reflection via Claude Code skills (manual invocation first, UI trigger later) | Should | 2 |
 
 ### FR-SOCIAL: Social Intelligence
 
@@ -144,26 +150,28 @@
 |----|------------|----------|-------|
 | FR-SCAFFOLD-01 | Load scaffolds from markdown+YAML files | Must | 1 |
 | FR-SCAFFOLD-02 | Load data scaffolds from JSON files | Must | 1 |
-| FR-SCAFFOLD-03 | list_guides, read_guide, create_guide, update_guide tools | Must | 1 |
-| FR-SCAFFOLD-04 | Trigger-based scaffold loading (auto-load relevant guides) | Must | 1 |
+| FR-SCAFFOLD-03 | search_scaffolds, list_scaffolds, read_scaffold, create_scaffold, update_scaffold tools | Must | 1 |
+| FR-SCAFFOLD-04 | Trigger-based scaffold loading via frontmatter triggers (auto-load relevant scaffolds) | Must | 1 |
 | FR-SCAFFOLD-05 | Scaffold versioning and change tracking | Should | 2 |
 | FR-SCAFFOLD-06 | Scaffold effectiveness metadata | Should | 3 |
 | FR-SCAFFOLD-07 | Conceptual exploration operator integration | Could | 5 |
 
-### FR-CMD: Slash Commands
+### FR-CMD: Agent Interaction Commands
+
+These are interface-agnostic agent commands — they may be invoked via UI buttons, API endpoints, or text input depending on the interface context.
 
 | ID | Requirement | Priority | Phase |
 |----|------------|----------|-------|
-| FR-CMD-01 | /ask — query the LLM about current state | Must | 1 |
-| FR-CMD-02 | /suggest — request action suggestion | Must | 1 |
-| FR-CMD-03 | /auto — toggle autonomous mode | Must | 1 |
-| FR-CMD-04 | /status — show engine state, active scaffolds, model | Must | 1 |
-| FR-CMD-05 | /scaffold — list/view/edit scaffolds | Must | 1 |
-| FR-CMD-06 | /goal — review/manage goals | Should | 1 |
-| FR-CMD-07 | /map — show current map | Should | 3 |
-| FR-CMD-08 | /review — start reflection session | Should | 2 |
-| FR-CMD-09 | /journal — view session journal | Should | 2 |
-| FR-CMD-10 | /model — change model assignment | Should | 2 |
+| FR-CMD-01 | ask — query the LLM about current state | Must | 1 |
+| FR-CMD-02 | suggest — request action suggestion | Must | 1 |
+| FR-CMD-03 | auto — toggle autonomous mode | Must | 1 |
+| FR-CMD-04 | status — show engine state, active scaffolds, model | Must | 1 |
+| FR-CMD-05 | scaffold — list/view/edit scaffolds | Must | 1 |
+| FR-CMD-06 | goal — review/manage goals | Should | 1 |
+| FR-CMD-07 | map — show current map | Should | 3 |
+| FR-CMD-08 | review — start reflection session | Should | 2 |
+| FR-CMD-09 | journal — view session journal | Should | 2 |
+| FR-CMD-10 | model — change model assignment | Should | 2 |
 | FR-CMD-11 | Extensible command registry for plugins | Could | 3 |
 
 ### FR-ACTION: Action Control
@@ -180,9 +188,12 @@
 
 | ID | Requirement | Priority | Phase |
 |----|------------|----------|-------|
-| FR-INT-01 | Sentence dump export format for ConceptMRI replay (tokens, scaffold versions, behavioral context) | Should | 2 |
-| FR-INT-02 | Full LLM call logging: prompt, response, scaffold versions, decision, outcome, model, latency, tokens | Must | 1 |
-| FR-INT-03 | Event log replay capability for offline analysis | Should | 2 |
+| FR-INT-01 | Full LLM call logging: prompt, all three harmony channels, scaffold versions, coordinates, outcome, latency, tokens | Must | 1 |
+| FR-INT-02 | Residual stream coordinates captured via ConceptMRI inference server on every call | Must | 1 |
+| FR-INT-03 | Analysis channel stored as `response_analysis` — primary signal for attractor conflict research | Must | 1 |
+| FR-INT-04 | Live coordinate streaming to React frontend for real-time UMAP visualization | Should | 2 |
+| FR-INT-05 | Session export for Claude Code reflection (session_log.json, episodes.json, scaffold_stats.json) | Should | 2 |
+| FR-INT-06 | Event log replay capability for offline analysis | Should | 2 |
 
 ---
 
@@ -192,8 +203,8 @@
 
 | ID | Requirement | Priority |
 |----|------------|----------|
-| NFR-PERF-01 | System 1 processing adds < 50ms latency to MUD output display | Must |
-| NFR-PERF-02 | System 2 reasoning should be visibly "thinking" in TUI (not blocking input) | Must |
+| NFR-PERF-01 | Assess phase (low reasoning effort) completes within 2 seconds | Must |
+| NFR-PERF-02 | Agent reasoning state visible in UI via WebSocket (phase + reasoning effort) without blocking user input | Must |
 | NFR-PERF-03 | Telnet connection handles high-throughput MUD output without dropping data | Must |
 | NFR-PERF-04 | Memory retrieval responds within 1 second for keyword search | Should |
 

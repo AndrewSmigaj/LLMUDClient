@@ -1,16 +1,28 @@
 # LLMUD — Document Index
 
+## Suggested Reading Order
+
+1. **[../CLAUDE.md](../CLAUDE.md)** — Start here. Project context, key decisions, routing table for task-specific docs.
+2. **[VISION.md](VISION.md)** — Why this exists. The dream, scaffolds as the core idea, ethics.
+3. **[AI_SYSTEM_DESIGN.md](AI_SYSTEM_DESIGN.md)** — The cognitive architecture. The Loop, scaffolds, memory, tools, infrastructure.
+4. **[ARCHITECTURE.md](ARCHITECTURE.md)** — How the design maps to code. Tech stack, modules, schemas, deployment.
+5. Then task-specific: [WORLD_DESIGN.md](WORLD_DESIGN.md), [REQUIREMENTS.md](REQUIREMENTS.md), [DEV_PROCESS.md](DEV_PROCESS.md), [INSTITUTION_DESIGN.md](INSTITUTION_DESIGN.md) as needed.
+
+---
+
 ## Documents
 
 | Document | Status | Description | Last Updated |
 |----------|--------|-------------|-------------|
-| [VISION.md](VISION.md) | Draft | Project vision, goals, ethics, scope | 2026-03-23 |
-| [AI_SYSTEM_DESIGN.md](AI_SYSTEM_DESIGN.md) | Draft | Cognitive architecture — the core design | 2026-03-23 |
-| [REQUIREMENTS.md](REQUIREMENTS.md) | Draft | Functional & non-functional requirements | 2026-03-23 |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Draft | Software architecture, tech stack, modules | 2026-03-23 |
-| [CLAUDE_CODE_GUIDE.md](CLAUDE_CODE_GUIDE.md) | Draft | How to use Claude Code for this project | 2026-03-23 |
-| [DEV_PROCESS.md](DEV_PROCESS.md) | Draft | Development workflow and practices | 2026-03-23 |
-| [../CLAUDE.md](../CLAUDE.md) | Draft | Project context for Claude Code sessions | 2026-03-23 |
+| [VISION.md](VISION.md) | Draft | Project vision, goals, ethics, scope | 2026-03-28 |
+| [AI_SYSTEM_DESIGN.md](AI_SYSTEM_DESIGN.md) | Draft | Cognitive architecture — the core design | 2026-03-28 |
+| [REQUIREMENTS.md](REQUIREMENTS.md) | Draft | Functional & non-functional requirements | 2026-03-28 |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Draft | Software architecture, tech stack, modules | 2026-03-28 |
+| [WORLD_DESIGN.md](WORLD_DESIGN.md) | Draft | Evennia test world: micro-worlds, scenarios, object/room specs | 2026-03-28 |
+| [INSTITUTION_DESIGN.md](INSTITUTION_DESIGN.md) | Vision | Public research institution: social architecture, AI scientists, visualization | 2026-03-28 |
+| [CLAUDE_CODE_GUIDE.md](CLAUDE_CODE_GUIDE.md) | Draft | How to use Claude Code for this project | 2026-03-28 |
+| [DEV_PROCESS.md](DEV_PROCESS.md) | Draft | Development workflow and practices | 2026-03-28 |
+| [../CLAUDE.md](../CLAUDE.md) | Draft | Project context for Claude Code sessions | 2026-03-28 |
 | [research/claude_code_patterns.md](research/claude_code_patterns.md) | Complete | Claude Code integration patterns and recommendations | 2026-03-24 |
 | [research/tech_stack_review.md](research/tech_stack_review.md) | Complete | Library evaluation, risk assessment, version strategy | 2026-03-24 |
 | [research/agent_orchestration.md](research/agent_orchestration.md) | Complete | Multi-agent framework evaluation and custom IFS design | 2026-03-24 |
@@ -25,57 +37,64 @@
 ## Open Design Questions
 
 ### Critical (block Phase 1 implementation)
-- [ ] Goal document format — is plain markdown enough or do we need lightweight structure?
-- [ ] Fast/slow handoff — start with regex rules? What patterns to match?
-- [ ] Bootstrap scaffolds — what ships with the system?
-- [ ] Evennia test world — room layout, NPCs, basic quests for testing
+- [x] ~~Bootstrap scaffolds~~ → Resolved: meta_assess, meta_plan, meta_goals, meta_scene, meta_needs, meta_learning (AI_SYSTEM_DESIGN.md)
+- [x] ~~Evennia test world~~ → Resolved: micro-worlds with tick-based rooms, Scenario 001 specified (WORLD_DESIGN.md)
+- [ ] Full content of each bootstrap scaffold — needs drafting
+- [ ] How does the assess scaffold decide routine vs. deep reasoning?
 
 ### Important (inform upcoming phases)
 - [ ] Eudaimonic motivation framework — needs its own design session
-- [ ] Data science tools for analyze_events — which methods, what interface?
-- [ ] Context overflow strategy — what gets dropped when everything is relevant?
-- [ ] Social intelligence depth — how much to implement vs. defer?
+- [ ] How to operationalize flourishing?
+- [ ] Right frequency for periodic goal review?
+- [ ] How does the agent recognize when a scaffold is working against it?
 
 ### Research (explore over time)
-- [ ] Limbic system analogy — curiosity/boredom neuroscience
+- [x] ~~Open LLMRI integration points~~ → Resolved: ConceptMRI unified into single app (2026-03-28)
+- [ ] Can ConceptMRI detect which attractor is active during reasoning?
+- [ ] Does scaffold refinement produce measurable representational change?
+- [ ] How does personality scaffolding interact with model-level personality?
+- [ ] Can we detect maladaptive attractors before observable behavior?
 - [ ] Conceptual exploration operators integration
-- [x] ~~Open LLMRI integration points~~ → Resolved: ConceptMRI replay via sentence dump export (2026-03-24)
 - [ ] Scaffold-to-internal-representation mapping — ConceptMRI A/B comparison enables this
 
 ## Key Decisions Made
 
+*This is the canonical decisions table with rationale and dates. CLAUDE.md has a summary loaded every session.*
+
 | Decision | Rationale | Date |
 |----------|-----------|------|
 | Python + asyncio | Rich LLM ecosystem, same language as Evennia, mature async | 2026-03-23 |
-| Textual for TUI | Modern, async, Rich-based, split panes | 2026-03-23 |
+| Unified React frontend (ConceptMRI + LLMUD) | Extend existing ConceptMRI React app with MUD panels; xterm.js for terminal | 2026-03-28 |
+| ConceptMRI unified into single app | Same React frontend, same Python backend; inference server handles both | 2026-03-28 |
+| ConceptMRI inference server (not Ollama/LMStudio) | Need PyTorch hooks for residual stream capture; Ollama has no internals access | 2026-03-28 |
+| Claude Code reads files directly (no MCP) | Filesystem access is sufficient; no server needed for offline reflection | 2026-03-28 |
 | LLM-as-planner (not formal BDI) | Trust LLM reasoning, scaffold the process not the content | 2026-03-23 |
 | No separate world model | LLM's training is the world model; scaffold game-specific knowledge only | 2026-03-23 |
 | Hybrid scaffold format | Markdown+YAML for cognitive, JSON for data | 2026-03-23 |
 | Flat files + SQLite persistence | Local-first, portable, human-readable scaffolds, queryable events | 2026-03-23 |
 | Eudaimonic motivation (not numeric meters) | Grounded in virtue ethics, balanced flourishing | 2026-03-23 |
 | Design for swarm, implement single agent | Context engineering rationale, IFS model, future extensibility | 2026-03-23 |
-| Custom provider abstraction (not LiteLLM) | Need per-task routing with reasoning levels | 2026-03-23 |
-| Separate repos, ConceptMRI as reference | LLMUD designs fresh, ConceptMRI for reference. Compare how each evolves. | 2026-03-24 |
-| Claude Code as analysis runtime (`claude -p`) | Subscription tokens for offline analysis (reflection, memory, scaffolds). Saves API credits. | 2026-03-24 |
-| Model strategy: local 20B + smaller + API + CC | gpt-oss-20b main, smaller TBD fast, API for complex, Claude Code for analysis | 2026-03-24 |
+| Em-OSS-20b via ConceptMRI inference | Primary agent on local GPU, harmony format, residual stream capture | 2026-03-28 |
 | Custom swarm orchestration (not framework) | CrewAI/LangGraph/AutoGen/SK evaluated and rejected. Blackboard-mediated IFS. | 2026-03-24 |
-| Hybrid UI: Textual TUI + web dashboard | TUI for gameplay (Phase 1), FastAPI+SvelteKit for research mgmt (Phase 3+) | 2026-03-24 |
-| Event bus from Phase 1 | Central async pub/sub. Enables TUI, logging, triggers, dashboard, Claude Code. | 2026-03-24 |
-| DuckDB for analytical queries (Phase 2) | OLAP complement to SQLite for event/LLM log analysis | 2026-03-24 |
+| Event bus from Phase 1 | Central async pub/sub. Enables UI, logging, triggers, Claude Code. | 2026-03-24 |
+| Tick-based micro-worlds | Evennia test world uses turn-based rooms for reproducible scenario research | 2026-03-28 |
 
 ## Cross-References
 
-- VISION.md §Ethics → AI_SYSTEM_DESIGN.md §8 (Eudaimonic Motivation)
-- VISION.md §Connection to Other Research → AI_SYSTEM_DESIGN.md §15 (Interpretability Hooks)
-- AI_SYSTEM_DESIGN.md §11 (Tool Interface) → ARCHITECTURE.md §Module Structure (tools/)
-- AI_SYSTEM_DESIGN.md §10 (Scaffolds) → ARCHITECTURE.md §Persistence (per-character directory)
-- AI_SYSTEM_DESIGN.md §13 (Event Bus) → ARCHITECTURE.md §Module Structure (events/)
-- AI_SYSTEM_DESIGN.md §14 (Swarm) → research/agent_orchestration.md
-- AI_SYSTEM_DESIGN.md §15 (Interpretability) → ConceptMRI (`C:\Users\emily\OpenAIHackathon-ConceptMRI\`)
-- REQUIREMENTS.md FR-COG → AI_SYSTEM_DESIGN.md §2 (Dual-Process)
-- REQUIREMENTS.md FR-LLM → ARCHITECTURE.md §LLM Provider Architecture
-- REQUIREMENTS.md FR-INT → AI_SYSTEM_DESIGN.md §15 (Interpretability Hooks)
-- ARCHITECTURE.md §UI Architecture → research/ui_research.md
-- ARCHITECTURE.md §Dependency Version Strategy → research/tech_stack_review.md Appendix C
-- DEV_PROCESS.md §Phase 1-2 → ARCHITECTURE.md §Module Structure (events/, mcp/)
+- VISION.md §Ethics → AI_SYSTEM_DESIGN.md §Research Directions (Motivation and Flourishing)
+- VISION.md §Connection to Other Research → AI_SYSTEM_DESIGN.md §Interpretability Hooks
+- AI_SYSTEM_DESIGN.md §Tools → ARCHITECTURE.md §Module Structure (backend/tools/)
+- AI_SYSTEM_DESIGN.md §Scaffolds → ARCHITECTURE.md §Persistence (per-character directory)
+- AI_SYSTEM_DESIGN.md §Infrastructure (Event Bus) → ARCHITECTURE.md §Module Structure (backend/events/)
+- AI_SYSTEM_DESIGN.md §Research Directions (IFS/Swarm) → research/agent_orchestration.md
+- AI_SYSTEM_DESIGN.md §Interpretability Hooks → ARCHITECTURE.md §Data Flow (Live Inference and Streaming)
+- REQUIREMENTS.md FR-COG → AI_SYSTEM_DESIGN.md §The Loop
+- REQUIREMENTS.md FR-LLM → AI_SYSTEM_DESIGN.md §The Agent, ARCHITECTURE.md §Tech Stack
+- REQUIREMENTS.md FR-INT → AI_SYSTEM_DESIGN.md §Interpretability Hooks
+- ARCHITECTURE.md §Deployment Architecture → research/ui_research.md
+- ARCHITECTURE.md §Dependencies → research/tech_stack_review.md
+- WORLD_DESIGN.md §Micro-Worlds → ARCHITECTURE.md §Module Structure (evennia_testworld/)
+- WORLD_DESIGN.md §Scenarios → AI_SYSTEM_DESIGN.md §Research Directions (Experimental Design)
+- INSTITUTION_DESIGN.md §Visualization Layer → ARCHITECTURE.md §Data Flow (Live Inference)
+- DEV_PROCESS.md §Phases → ARCHITECTURE.md §Module Structure
 - CLAUDE_CODE_GUIDE.md → research/claude_code_patterns.md

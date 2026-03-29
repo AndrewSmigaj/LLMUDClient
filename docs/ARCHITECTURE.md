@@ -253,6 +253,8 @@ conceptmri-llmud/
 │   │       └── memory.db
 │   └── .gitignore
 │
+│   New characters: copy _template/ directory and rename.
+│
 ├── docs/
 │   ├── VISION.md
 │   ├── AI_SYSTEM_DESIGN.md

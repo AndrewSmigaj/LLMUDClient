@@ -38,6 +38,8 @@ Scaffolds exist at multiple levels:
 
 The key property: **scaffolds are inspectable.** They are versioned markdown and JSON files. You can diff them, share them, and watch an agent's knowledge change over time as the files change. Compare this to fine-tuning, where learned knowledge is locked inside weights with no way to see what changed or why.
 
+*Full scaffold format, lifecycle, discovery, and bootstrap set in `AI_SYSTEM_DESIGN.md` §Scaffolds.*
+
 ---
 
 ## Scaffold Dynamics: Creating Virtuous LLMs
@@ -80,7 +82,7 @@ Em-OSS-20b's Harmony response format adds an unusually direct interpretability s
 
 **Conceptual Exploration Operators** — Techniques for jumping to new regions of design space when local scaffold optimization plateaus. Will integrate into scaffold evolution in later phases.
 
-**Claude Code as analysis runtime** — Both LLMUD and ConceptMRI use Claude Code for offline reasoning. An MCP server bridges LLMUD's state to Claude Code, exposing memory stores, session logs, and scaffolds as callable tools.
+**Claude Code as analysis runtime** — Both LLMUD and ConceptMRI use Claude Code for offline reasoning. Claude Code reads log files, memory exports, and scaffolds directly from the character directory on disk — no server needed.
 
 The shared question: *how do structured external guides interact with an LLM's internal attractor landscape — and can we learn to navigate that landscape deliberately?*
 
@@ -115,3 +117,5 @@ Design documents capture the full vision. Implementation proceeds in phases, eac
 5. Swarm, interpretability hooks
 
 The Evennia test world grows alongside: simple needs puzzles first, then combat, then social challenges, then multi-step quests that exercise the full architecture.
+
+*Phase details, subsystems, and exit criteria in `DEV_PROCESS.md` §Implementation Phases.*

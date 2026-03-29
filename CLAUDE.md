@@ -8,19 +8,19 @@ This is both a usable tool for MUD players and a research platform for exploring
 
 ## Key Design Decisions
 
-These have been deliberated and decided. Do not re-litigate unless Emily asks:
+These have been deliberated and decided. Do not re-litigate unless Emily asks. Canonical table with rationale and dates: `INDEX.md` §Key Decisions Made.
 
 - **Language**: Python 3.11+ with asyncio
-- **TUI**: Textual (Rich-based terminal UI) for gameplay; FastAPI + SvelteKit web dashboard for research (Phase 3+)
-- **Telnet**: telnetlib3 (async, with abstraction layer for swappability)
-- **Model strategy**: gpt-oss-20b local ("emily", main agent, free) + smaller local TBD (fast, free) + Claude/GPT API (complex, credits) + Claude Code `claude -p` (offline analysis, subscription tokens)
-- **Claude Code as analysis runtime**: `claude -p` subprocess calls use subscription tokens ($100/mo). Powers reflection, memory consolidation, scaffold evaluation. MCP server bridges LLMUD state to Claude Code.
-- **ConceptMRI**: Separate repo (`C:\Users\emily\OpenAIHackathon-ConceptMRI\`), shares gpt-oss-20b. LLMUD exports sentence dumps for ConceptMRI replay. Design fresh, use as reference.
-- **Event bus**: Central async pub/sub from Phase 1. All significant events flow through it. Enables TUI, logging, triggers, dashboard, Claude Code analysis.
+- **UI**: React frontend extending ConceptMRI, with xterm.js for MUD terminal. Single unified app — local analysis mode + institute mode.
+- **Telnet**: telnetlib3 (agent → Evennia connection). Users connect via WebSocket to the React frontend.
+- **Model strategy**: gpt-oss-20b local (Em, main agent, free) via ConceptMRI inference server (PyTorch hooks for residual stream capture). Claude Code `claude -p` for offline analysis (subscription tokens).
+- **Claude Code as analysis runtime**: `claude -p` reads log files directly from disk. No MCP server needed — Claude Code has filesystem access.
+- **ConceptMRI**: Unified into a single application with LLMUD. Same React frontend, same Python backend. ConceptMRI inference server handles Em + PyTorch hooks.
+- **Event bus**: Central async pub/sub from Phase 1. All significant events flow through it. Enables UI, logging, triggers, Claude Code analysis.
 - **Swarm**: Custom Blackboard-Mediated IFS orchestration (not CrewAI/LangGraph/AutoGen). Build single-agent first, swarm later.
-- **Test server**: Self-hosted Evennia MUD instance
-- **Client is MUD-agnostic**: Works with any telnet MUD
-- **Persistence**: Flat files (git-versioned) for scaffolds/guides/config; SQLite for structured game data; DuckDB for analytical queries (Phase 2)
+- **Test server**: Self-hosted Evennia MUD instance with tick-based micro-worlds
+- **Client is MUD-agnostic**: Agent can connect to any telnet MUD
+- **Persistence**: Flat files (git-versioned) for scaffolds/guides/config; SQLite for structured game data (aiosqlite)
 - **Scaffold format**: Markdown with YAML frontmatter for cognitive scaffolds; JSON for data scaffolds
 
 ## Architecture Philosophy
@@ -40,20 +40,35 @@ These have been deliberated and decided. Do not re-litigate unless Emily asks:
 4. **Check docs/ for context.** The design documents capture extensive brainstorming and should be consulted before making architectural decisions.
 5. **ConceptMRI as reference.** When designing modules (especially LLM/analysis/skills), check ConceptMRI for proven patterns. Design fresh — don't copy.
 
+## What to Read When
+
+| Task | Start here | Then |
+|------|-----------|------|
+| Implementing a backend module | `ARCHITECTURE.md` §Module Structure | `AI_SYSTEM_DESIGN.md` for the design behind it |
+| Designing cognitive behavior | `AI_SYSTEM_DESIGN.md` | — |
+| Building Evennia content | `WORLD_DESIGN.md` | `ARCHITECTURE.md` §Module Structure (evennia_testworld/) |
+| Understanding the vision/motivation | `VISION.md` | `INSTITUTION_DESIGN.md` for the public-facing vision |
+| Checking what to build next | `DEV_PROCESS.md` §Phases | `INDEX.md` §Open Design Questions |
+| Working with Claude Code on this project | `CLAUDE_CODE_GUIDE.md` | — |
+| Looking up a specific requirement | `REQUIREMENTS.md` (search by FR-/NFR- ID) | Source design doc for full spec |
+| Checking what was decided and why | `INDEX.md` §Key Decisions Made | — |
+
 ## Documentation
 
 - `docs/VISION.md` — Why this exists, the dream, ethics
-- `docs/AI_SYSTEM_DESIGN.md` — Cognitive architecture (the big one)
-- `docs/REQUIREMENTS.md` — Functional and non-functional requirements
-- `docs/ARCHITECTURE.md` — Software architecture, tech stack, modules
-- `docs/INDEX.md` — Document status tracker
+- `docs/AI_SYSTEM_DESIGN.md` — Cognitive architecture: the loop, scaffolds, memory, tools, research directions
+- `docs/ARCHITECTURE.md` — Software architecture: tech stack, module tree, data flow, schemas, WebSocket protocol
+- `docs/WORLD_DESIGN.md` — Evennia test world: micro-worlds, scenarios, object/room YAML specs
+- `docs/INSTITUTION_DESIGN.md` — Public research institution: social architecture, AI scientists, visualization (vision doc)
+- `docs/REQUIREMENTS.md` — Functional and non-functional requirements (FR-/NFR- IDs)
+- `docs/INDEX.md` — Document status, open questions, key decisions (canonical), cross-references
+- `docs/DEV_PROCESS.md` — Implementation phases, testing, collaboration style
 - `docs/CLAUDE_CODE_GUIDE.md` — How to use Claude Code on this project
-- `docs/DEV_PROCESS.md` — Development workflow
-- `docs/research/` — Research outputs: claude_code_patterns, tech_stack_review, agent_orchestration, ui_research
+- `docs/research/` — Pre-decision research artifacts (may reference superseded designs — check main docs for current decisions)
 
 ## Conventions
 
 - Python 3.11+, type hints, asyncio for I/O
 - Pydantic for data models and config
 - pytest + pytest-asyncio for testing
-- Module boundaries: events, mcp, client, parser, tui, llm, engine, scaffolds, commands, world, memory, social, reflection, knowledge, tools, config
+- Module boundaries (under `backend/`): conceptmri, agent, mud, streaming, memory, scaffolds, social, world, reflection, goals, tools, events, api

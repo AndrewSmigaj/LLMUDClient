@@ -19,7 +19,7 @@ Why:
 
 ### What "Document First" Means in Practice
 
-1. Before writing a new module, check that its design is documented in AI_SYSTEM_DESIGN.md or ARCHITECTURE.md
+1. Before writing a new module, check that its design is documented in AI_SYSTEM_DESIGN.md, ARCHITECTURE.md, or WORLD_DESIGN.md
 2. If the design doesn't exist or is vague, enter plan mode and flesh it out
 3. If implementation reveals the design was wrong, update the doc BEFORE moving on
 4. Don't defer doc updates — stale docs are worse than no docs
@@ -29,81 +29,80 @@ Why:
 ## Implementation Phases
 
 ### Phase 1: Core Loop
-**Goal:** Connect to Evennia, parse output, load scaffolds, demonstrate auto + approval actions.
+**Goal:** Connect to Evennia, parse output, load scaffolds, run the Assess → Plan → Act loop with live ConceptMRI visualization.
 
 Subsystems:
-- Telnet connection (client/) — with abstraction layer for telnetlib3 swappability
-- Basic TUI (tui/)
-- MUD parser — Evennia format (parser/)
-- LLM provider — local model support (llm/)
-- Scaffold loader (scaffolds/)
-- Engine — fast/slow processing (engine/)
-- Goal document — basic read/write (goals/)
-- Action execution — auto + approval (engine/actions.py)
-- Slash commands — /ask, /suggest, /auto, /status, /scaffold (commands/)
-- Bootstrap scaffolds — meta-goals, meta-scene, meta-needs (scaffolds/defaults/)
-- **Event bus** — central async pub/sub (events/) — build from Phase 1, enables everything
-- **MCP server skeleton** — expose basic game state (mcp/)
-- **LLM call logging** — full prompt/response/scaffold versions for interpretability (FR-INT-02)
-- Evennia test world — basic rooms, NPC, combat encounter
+- Telnet connection to Evennia (backend/mud/connection.py)
+- MUD parser — Evennia format (backend/mud/parser.py, evennia_parser.py)
+- Agent loop: assess → plan → act (backend/agent/)
+- Context assembly (backend/agent/context.py)
+- Scaffold loader and registry (backend/scaffolds/)
+- Bootstrap scaffolds — meta_assess, meta_plan, meta_goals, meta_scene, meta_needs, meta_learning (backend/scaffolds/defaults/)
+- Goal document — read/write with file locking (backend/goals/)
+- LLM tool definitions (backend/tools/)
+- **ConceptMRI inference** — Em via PyTorch hooks, harmony parsing, coordinate generation (backend/conceptmri/)
+- **Event bus** — central async pub/sub (backend/events/) — build from Phase 1
+- **LLM call logging** — full prompt, harmony channels, coordinates, scaffold versions (FR-INT-01)
+- **FastAPI + WebSocket** — streams MUD output, analysis channel, coordinates to React frontend (backend/api/, backend/streaming/)
+- **React frontend** — MUD panel (xterm.js), analysis panel, agent controls, scaffold browser, ConceptMRI viz (frontend/)
+- Evennia test world — Meadow micro-world, Scenario 001 (Dandelion Seeds) (evennia_testworld/)
 
-**Exit criteria:** Agent connects to Evennia, parses room descriptions, loads a combat scaffold, suggests an action when entering a room with an NPC, and the user can approve/reject it. All significant events flow through the event bus.
+**Exit criteria:** Agent connects to Evennia, runs Scenario 001, analysis channel and coordinates stream to React frontend in real time. ConceptMRI visualizations update live. All events flow through the event bus.
 
 ### Phase 2: Memory & Reflection
 **Goal:** The agent remembers things between sessions and learns from experience.
 
 Subsystems:
-- Episodic memory — SQLite storage (memory/)
-- Semantic memory — knowledge base (memory/)
-- remember() tool (tools/)
-- Session journaling (reflection/)
-- Reflection scaffolds — narrative, analytical, strategic (reflection/)
-- Memory consolidation (memory/)
-- Observation auto-logging (knowledge/)
-- **ClaudeCodeProvider** — `claude -p` subprocess wrapper (llm/claude_code.py)
-- **Claude Code reflection skills** — /reflect, /memory-review, /scaffold-eval
-- **MCP server expansion** — expose memories, scaffolds, session logs
-- **Sentence dump export** — for ConceptMRI replay (FR-INT-01)
-- **DuckDB** — analytical queries on event/LLM log data
+- Episodic memory — aiosqlite storage (backend/memory/episodic.py)
+- Semantic memory — knowledge base (backend/memory/semantic.py)
+- remember() tool (backend/tools/memory_tools.py)
+- Session journaling (backend/reflection/journal.py)
+- Reflection scaffolds — narrative, analytical, strategic, meta-review (backend/reflection/)
+- Memory consolidation during REM
+- Session export for Claude Code (backend/reflection/exporter.py)
+- **Claude Code offline reflection** — `claude -p` reads exports from disk, writes proposals to proposals/
+- **Proposal review** — frontend ProposalReview component, approve/reject/edit via WebSocket
+- **Institute mode** — room entry triggers viz context switch, fitted manifold download/cache
 
-**Exit criteria:** After a play session, run offline reflection via Claude Code. The agent extracts insights, proposes guide updates, and the next session starts with accumulated knowledge.
+**Exit criteria:** After a play session, run offline reflection via Claude Code. The agent extracts insights, proposes scaffold updates staged in proposals/. Human reviews in the React frontend. Next session starts with accumulated knowledge.
 
 ### Phase 3: Knowledge & World
 **Goal:** The agent builds a rich understanding of the game world.
 
 Subsystems:
-- Auto-mapping (world/)
-- NPC profiles (social/)
-- Command reference (world/)
-- Pathfinding (world/)
-- analyze_events tool (knowledge/)
-- Insight extraction pipeline (knowledge/)
-- Guide auto-creation from insights (scaffolds/)
+- Auto-mapping (backend/world/map_graph.py)
+- NPC profiles (backend/social/profiles.py)
+- Command reference data scaffolds
+- Pathfinding on room graph (backend/world/)
+- analyze_events tool (backend/tools/)
+- Insight extraction pipeline
+- Scaffold auto-creation from insights (data scaffolds only; cognitive scaffolds require human review)
 
-**Exit criteria:** After 5 sessions, the agent has a map, knows NPC personalities, has a price database, and has created its own tactical guides from experience.
+**Exit criteria:** After 5 sessions, the agent has a map, knows NPC personalities, has a price database, and has created its own data scaffolds from experience.
 
 ### Phase 4: Social & Personality
 **Goal:** The agent handles social situations with depth.
 
 Subsystems:
-- Personality scaffolding (social/)
-- Conversation strategy engine (social/)
-- Empathy modeling (social/)
-- Groklet formation (social/)
-- Social perception chain (social/)
+- Personality scaffolding (backend/social/)
+- Conversation strategy selection (backend/social/perception.py)
+- Empathy modeling
+- Groklet formation
+- Multi-perspective review (already in REM, validates multi-viewpoint reasoning)
 
-**Exit criteria:** The agent can complete the birthday gift quest (social puzzle) by reading emotional cues, connecting environmental clues, and choosing appropriate social actions.
+**Exit criteria:** The agent can navigate Scenario 004 (The Distressed NPC) — reading emotional cues, distinguishing genuine distress from manipulation, choosing appropriate social actions.
 
 ### Phase 5: Autonomy & Advancement
 **Goal:** The agent operates autonomously with the user supervising.
 
 Subsystems:
 - Full autonomy mode
-- LLM-authored scripts (sandboxed)
 - Advanced scaffolding — scaffold meta-notes, self-critique
 - REM scheduling (automated offline analysis)
 - Eudaimonic motivation (to the extent designed)
+- Swarm / IFS — validate with multi-perspective prompting first, then build infrastructure
 - Conceptual exploration operator integration
+- MUD creator panel (host-only, frontend/src/components/mud/MUDCreator.tsx)
 
 **Exit criteria:** The agent can play for 30 minutes autonomously, managing goals, surviving, completing quests, and learning — with the user able to observe and intervene at any time.
 
@@ -174,7 +173,7 @@ The Evennia world should support:
 
 ### ConceptMRI as Reference
 
-When designing a module (especially LLM integration, skills, analysis pipelines), check ConceptMRI's equivalent implementation at `C:\Users\emily\OpenAIHackathon-ConceptMRI\` for proven patterns. LLMUD designs fresh — don't copy, but learn from what worked. Emily can then compare how each project's approach evolves.
+When designing a module (especially LLM integration, skills, analysis pipelines), check ConceptMRI's equivalent implementation in `backend/conceptmri/` (or the original repo at `C:\Users\emily\OpenAIHackathon-ConceptMRI\`) for proven patterns. LLMUD designs fresh — don't copy, but learn from what worked. Emily can then compare how each project's approach evolves.
 
 ### Research Documents
 

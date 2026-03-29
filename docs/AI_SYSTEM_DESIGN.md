@@ -6,6 +6,22 @@ This document describes the cognitive architecture of the LLMUD agent. The desig
 
 ---
 
+## Contents
+
+- [The Agent: Em-OSS-20b](#the-agent-em-oss-20b)
+- [The Loop](#the-loop)
+- [Context Assembly](#context-assembly)
+- [Scaffolds](#scaffolds)
+- [Memory](#memory)
+- [NPC and Social Profiles](#npc-and-social-profiles)
+- [Reflection and REM](#reflection-and-rem)
+- [Tools](#tools)
+- [Infrastructure](#infrastructure) — Model routing, event bus, error handling, harmony format, interpretability hooks
+- [Research Directions](#research-directions) — Future work, not Phase 1 targets
+- [Open Questions](#open-questions)
+
+---
+
 ## The Agent: Em-OSS-20b
 
 The primary agent runs on gpt-oss-20b locally on the developer's GPU machine. Key properties that shape the design:
@@ -356,7 +372,9 @@ The combination gives ground truth that most interpretability work has to infer:
 
 ## Research Directions
 
-### Creating Virtuous LLMs
+*These are future directions, not Phase 1 targets. Items marked [Build] will become design sections when their phase arrives. Items marked [Research] are open questions explored over time.*
+
+### Creating Virtuous LLMs [Research]
 
 Can scaffolding make an LLM behave more wisely — not just more helpfully?
 
@@ -366,7 +384,7 @@ LLMs have internalized attractors. Most are useful. But they're context-blind �
 
 **Internalized** — The model's own basins pull against the scaffold's intent. Which wins is measurable.
 
-### The Experimental Design
+### The Experimental Design [Research]
 
 The Evennia test world generates attractor conflict situations. The agent is given user needs (money, reputation, survival, quests, relationships) that deliberately conflict with each other and with internal attractors. The world records outcomes — ground truth, no inference needed.
 
@@ -379,27 +397,27 @@ The Evennia test world generates attractor conflict situations. The agent is giv
 
 Each scenario designed so attractor-following produces a measurable bad outcome. Conflict matrix: user needs versus LLM attractors, world as referee.
 
-### ConceptMRI as the Instrument
+### ConceptMRI as the Instrument [Research]
 
 Outcomes tell you whether the attractor won. ConceptMRI tells you what happened internally: residual stream capture during the forward pass, UMAP projection, cluster analysis. Compare scaffold A versus scaffold B — did the representation actually shift, or did the scaffold just add aligned-sounding words on top of the same underlying processing?
 
-### The Self-Scaffolding Endpoint
+### The Self-Scaffolding Endpoint [Research]
 
 Long-term target: the agent detects its own attractor activating and applies a learned interrupt. ConceptMRI shows whether the interrupt produces genuine representational change or just additional tokens.
 
-### Motivation and Flourishing
+### Motivation and Flourishing [Build — Phase 5]
 
 Grounded in virtue ethics — balanced flourishing across survival, competence, social connection, exploration, creativity, coherence. Personality is scaffolding — a coherent configuration of need strengths and reasoning styles. Needs significant further design work.
 
-### Internal Family Systems / Swarm
+### Internal Family Systems / Swarm [Build — Phase 5]
 
 Specialized agents coordinating through a shared blackboard. Validate first with multi-perspective prompting (already in REM) before building infrastructure.
 
-### Dual-Model Processing
+### Dual-Model Processing [Build — deferred]
 
 Two models, always running, domain-partitioned. Fast model: parsing, vitals, reflexes. Slow model: reasoning, planning, social. Deferred; architecture supports it without refactoring.
 
-### LoRA and Basin Reshaping
+### LoRA and Basin Reshaping [Research]
 
 Insights graduating from scaffold to weights. Risk: basin reshaping — context-specific attractors becoming context-general. Pre/post-LoRA basin analysis is a ConceptMRI target. Held at arm's length.
 

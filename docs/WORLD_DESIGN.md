@@ -455,3 +455,14 @@ When generating Evennia content, Claude Code needs:
 - The scenario spec if the object is part of a scenario
 
 The `CLAUDE.md` in `evennia_testworld/` points to these resources and explains the generation workflow.
+
+---
+
+## Implementation Notes
+
+The following Evennia-specific details are implementation-time decisions, not design questions:
+
+- **KnowledgeMixin typeclass hierarchy** — where in Evennia's typeclass tree does the mixin attach? Determined when building the first interactable object.
+- **TurnRoom Evennia scripts** — which Evennia Script methods and hooks does the turn manager use? Determined when implementing the tick lifecycle.
+- **Observer feed routing** — how do live feeds (MUD output, analysis channel, outcome flags) reach observer spaces? Options: event bus, Evennia's msg() system, WebSocket relay. Determined during Phase 1 integration.
+- **Scenario reset mechanics** — how does `reset_scenario()` interact with Evennia's object persistence and attribute system? Determined when building the scenario runner.

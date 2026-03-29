@@ -6,6 +6,8 @@ The institution is not a website that describes research. It is a place you inha
 
 **Status:** Vision document. Technical foundations (ConceptMRI, LLMUD client, Evennia world) are under active development. Institution layer is the next phase.
 
+**Related:** [ARCHITECTURE.md](ARCHITECTURE.md) (deployment, data flow), [WORLD_DESIGN.md](WORLD_DESIGN.md) (micro-worlds and scenarios), [AI_SYSTEM_DESIGN.md](AI_SYSTEM_DESIGN.md) (cognitive architecture)
+
 ---
 
 ## What It Is
@@ -211,11 +213,11 @@ When they connect to the institute's world, their agent runs on their own GPU ma
 
 ### Deployment
 
-**Developer desktop (GPU machine):** Em-OSS-20b with PyTorch hooks, ConceptMRI inference server, agent loop, Claude Code for offline reflection (reads files directly from disk — no server needed).
+**Developer desktop (GPU machine):** Em-OSS-20b with PyTorch hooks, ConceptMRI inference server, agent loop, FastAPI + WebSocket backend, Claude Code for offline reflection (reads files directly from disk — no server needed).
 
-**Server (always-on):** Evennia world and tick manager, coordinate relay (receives packets from desktop, broadcasts to clients). Single telnet connection per user — game feed and coordinates multiplexed.
+**Server (always-on):** Evennia world and tick manager, coordinate relay (receives coordinate packets from desktop, broadcasts to clients).
 
-**User machine:** TUI client — one connection, three panes.
+**User machine:** React frontend in browser — single WebSocket connection multiplexing MUD output, analysis channel, coordinates, and room context.
 
 ### Two-Phase Visualization
 
@@ -223,7 +225,7 @@ When they connect to the institute's world, their agent runs on their own GPU ma
 
 **Live** — each new trace is a single projection into the fitted manifold. Fast enough to update within seconds. Punctuated rhythm — point lights up, holds basin position, jumps when the target word appears again.
 
-### Current State
+### Current State (as of 2026-03-28)
 
 - **ConceptMRI**: working, producing results (tank probe, suicide letter probe, NPC social stance probe)
 - **ConceptMRI inference server**: exists, needs LLMUD API extension

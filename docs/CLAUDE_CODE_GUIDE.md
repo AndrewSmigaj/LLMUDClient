@@ -19,7 +19,7 @@ Different kinds of work call for different Claude Code approaches:
 ### Implementation Session
 **When:** Writing code for a designed feature.
 **How:**
-- Point Claude to the relevant design doc section: "Implement the scaffold loader as described in AI_SYSTEM_DESIGN.md §10"
+- Point Claude to the relevant design doc section: "Implement the scaffold loader as described in AI_SYSTEM_DESIGN.md §Scaffolds"
 - Claude will read the doc, create a task list, and implement step by step
 - Use `/ask` if you need to check something mid-implementation
 - Run tests frequently — ask Claude to write tests alongside code
@@ -28,7 +28,7 @@ Different kinds of work call for different Claude Code approaches:
 **When:** Reviewing what's been built, checking alignment with design.
 **How:**
 - Ask Claude to read the current code and compare against the design docs
-- "Does the memory system match what's in AI_SYSTEM_DESIGN.md §4?"
+- "Does the memory system match what's in AI_SYSTEM_DESIGN.md §Memory?"
 - Great for catching drift between design and implementation
 
 ### Debugging Session
@@ -124,9 +124,10 @@ Auto-format Python files on Write/Edit via `.claude/settings.json`:
 
 When creating module directories, add a brief CLAUDE.md that orients future sessions:
 ```
-llmud/client/CLAUDE.md    → "Async telnetlib3. Never block. See ARCHITECTURE.md §Telnet."
-llmud/scaffolds/CLAUDE.md → "Heart of the project. NEVER simplify. See AI_SYSTEM_DESIGN.md §10."
-llmud/social/CLAUDE.md    → "Full-depth social intelligence. Do NOT simplify. See AI_SYSTEM_DESIGN.md §9."
+backend/mud/CLAUDE.md       → "Async telnetlib3. Never block. See ARCHITECTURE.md §Tech Stack."
+backend/scaffolds/CLAUDE.md → "Heart of the project. NEVER simplify. See AI_SYSTEM_DESIGN.md §Scaffolds."
+backend/social/CLAUDE.md    → "Full-depth social intelligence. Do NOT simplify. See AI_SYSTEM_DESIGN.md §NPC and Social Profiles."
+backend/agent/CLAUDE.md     → "Core loop: assess → plan → act. See AI_SYSTEM_DESIGN.md §The Loop."
 ```
 
 These are loaded when Claude reads files in that directory, providing instant context.
@@ -222,7 +223,9 @@ Claude Code isn't just for development — it's also LLMUD's offline analysis ru
 - `/scaffold-eval` — Evaluate scaffold effectiveness from session data
 - `/knowledge-mine` — Extract game knowledge patterns from logs
 
-These skills access LLMUD data through an MCP server. The skill pattern follows ConceptMRI's proven approach — see `C:\Users\emily\OpenAIHackathon-ConceptMRI\.claude\skills\` for reference implementations.
+These skills read LLMUD data directly from the character directory on disk — session logs, episodic memory exports, scaffold files. No server needed. Claude Code has filesystem access and reads what it needs.
+
+*General development workflow and practices in [DEV_PROCESS.md](DEV_PROCESS.md).*
 
 ---
 
