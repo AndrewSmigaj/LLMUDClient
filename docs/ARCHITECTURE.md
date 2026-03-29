@@ -6,394 +6,386 @@ This document maps the AI System Design to actual code: tech stack, module struc
 
 ---
 
+## Overview
+
+LLMUD and ConceptMRI are unified into a single application. The existing ConceptMRI React frontend is extended with MUD capabilities. Users have two modes that blend naturally:
+
+**Local analysis mode** — user loads their own datasets, runs probes against their local model, visualizes results in ConceptMRI panels. Fully local, no server connection needed. This is what ConceptMRI already does.
+
+**Institute mode** — user connects to the hosted Evennia server. A MUD panel appears. As they navigate rooms, the trajectory panel automatically switches to the data source controlled by that room's active probe. The room owns the visualization context. Local datasets remain accessible in other tabs.
+
+The same visualization components serve both modes — different data sources, same interface.
+
+---
+
+## Deployment Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Developer Desktop (GPU machine)                     │
+│                                                      │
+│  ┌──────────────────────────────────────────────┐   │
+│  │  Python Backend                               │   │
+│  │                                               │   │
+│  │  ConceptMRI inference (existing)             │   │
+│  │  Em-OSS-20b with PyTorch hooks               │   │
+│  │  Harmony parsing, coordinate generation      │   │
+│  │                                               │   │
+│  │  Agent loop (new)                            │   │
+│  │  assess → plan → act                         │   │
+│  │  Calls inference, connects to Evennia        │   │
+│  │  Writes logs to disk                         │   │
+│  │                                               │   │
+│  │  FastAPI + WebSocket (extended)              │   │
+│  │  Streams MUD output, analysis channel,       │   │
+│  │  coordinate updates to React frontend        │   │
+│  │  Serves manifold files for download          │   │
+│  └──────────────────────────────────────────────┘   │
+│                                                      │
+│  Claude Code reads log files from disk               │
+│  for offline reflection — no server needed           │
+└─────────────────┬────────────────────────────────────┘
+                  │ telnet (agent → Evennia)
+                  │ HTTP push (coordinates → relay)
+                  ▼
+┌─────────────────────────────────────────────────────┐
+│  Server (always-on)                                  │
+│                                                      │
+│  Evennia — MUD world, tick manager, room metadata   │
+│  Coordinate relay — receives from desktop,           │
+│                     broadcasts to clients            │
+└─────────────────────────────────────────────────────┘
+                  ▲
+                  │ WebSocket (game + room metadata + coordinates)
+                  │
+┌─────────────────────────────────────────────────────┐
+│  React Frontend (user browser)                       │
+│  Local analysis mode + Institute mode                │
+│  Same components, different data sources             │
+└─────────────────────────────────────────────────────┘
+```
+
+**Key decisions:**
+- One unified app — ConceptMRI React frontend extended with MUD panels
+- Agent loop runs on GPU desktop — one machine owns all inference
+- Em called via existing ConceptMRI inference — PyTorch hooks active
+- Claude Code reads log files directly — no server or API for reflection
+- Users connect via a single WebSocket — no separate telnet client
+- Room entry triggers automatic viz context switch in the frontend
+- Fitted manifolds served as downloadable files — client caches them
+
+---
+
 ## Tech Stack
 
-| Component | Choice | Rationale |
-|-----------|--------|-----------|
-| **Language** | Python 3.11+ | Asyncio for networking, rich LLM ecosystem, same language as Evennia, type hints |
-| **TUI** | Textual | Modern async TUI on top of Rich. Split panes, widgets, CSS-like styling. Active development. |
-| **Telnet** | telnetlib3 | Async telnet client with protocol negotiation support (IAC, NAWS, GMCP) |
-| **LLM (local)** | OpenAI-compatible API | Ollama, LMStudio, vLLM all expose this. Universal local model interface. |
-| **LLM (API)** | httpx + anthropic SDK | Async HTTP. Anthropic SDK for Claude, httpx for others. |
-| **Data models** | Pydantic v2 | Validation, serialization, settings management. Models for game state, scaffolds, config. |
-| **Scaffold parsing** | python-frontmatter + PyYAML | Parse YAML frontmatter from markdown scaffold files |
-| **Database** | aiosqlite | Async SQLite for episodic memory, session logs, map graph, NPC interactions |
-| **Analysis tools** | pandas + scikit-learn (optional) | For the analyze_events tool. Only loaded when needed. |
-| **Analytical DB** | DuckDB (Phase 2) | OLAP complement to SQLite for analytical queries on event/LLM log data |
-| **Config** | pydantic-settings | Type-safe settings with env var and .env support |
-| **TUI charts** | textual-plotext (Phase 2) | Lightweight ASCII-based in-terminal plotting |
-| **Testing** | pytest + pytest-asyncio + pytest-cov + pytest-timeout | Standard Python testing. Async, coverage, and timeout support. |
-| **Packaging** | pyproject.toml + uv | Modern Python packaging. uv for fast dependency resolution. |
-| **Claude Code** | `claude -p` subprocess | Offline analysis runtime using subscription tokens ($100/mo) |
-| **MCP** | mcp Python SDK | MCP server exposing LLMUD state to Claude Code |
+### Frontend (existing + extended)
+
+| Component | Choice | Notes |
+|-----------|--------|-------|
+| Framework | React | Existing ConceptMRI frontend |
+| MUD terminal | xterm.js | Terminal emulator, ANSI support |
+| WebSocket | Native browser WebSocket | Game feed, analysis, coordinates |
+| Visualization | Existing ConceptMRI components | Same components, new data sources |
+
+### Backend (existing + extended)
+
+| Component | Choice | Notes |
+|-----------|--------|-------|
+| Language | Python 3.11+ | Existing |
+| API | FastAPI | Extended with new endpoints |
+| WebSocket | FastAPI WebSocket | Streams to frontend |
+| Telnet | telnetlib3 | Agent connects to Evennia |
+| Inference | PyTorch + harmony | Existing ConceptMRI inference |
+| Data models | Pydantic v2 | Existing |
+| Database | aiosqlite | Async SQLite |
+| Scaffold parsing | python-frontmatter + PyYAML | New |
+| UMAP | umap-learn | Existing |
+| Claude Code | claude -p CLI | Offline reflection, reads files |
 
 ### Why Not These Alternatives
 
 | Alternative | Why Not |
 |-------------|---------|
-| LangChain/LangGraph | Adds abstraction we don't need. Our provider abstraction is simpler and specific to our use case. |
-| LiteLLM | Good universal adapter but Emily wants custom routing logic per task type. |
-| curses/blessed | Textual is more capable and maintainable for complex layouts. |
-| PostgreSQL | Overkill for local-first. SQLite keeps everything in one file per character. |
-| Redis | No need for a cache server. In-memory dicts + SQLite suffice. |
-| pydantic-ai | Evaluate before coding LLM layer — may simplify provider abstraction. Don't commit without evaluation. |
-
-### Risk Mitigations
-
-| Library | Risk | Mitigation |
-|---------|------|------------|
-| telnetlib3 | Sparse maintenance, small user base | Build abstraction layer so telnet library is swappable. Limit surface area to connection/read/write. |
+| Separate TUI client | Already have React frontend — extend it |
+| Ollama / LMStudio | No PyTorch internals — can't capture residual streams |
+| MCP server for Claude Code | Reads files directly — no server needed |
+| Two connections per user | Single WebSocket multiplexes everything |
 
 ---
 
 ## Module Structure
 
 ```
-LLMUDClient/
-├── CLAUDE.md                       # Project context for Claude Code
-├── pyproject.toml                  # Package definition and dependencies
+conceptmri-llmud/
+├── CLAUDE.md
+├── pyproject.toml
 ├── README.md
 │
-├── llmud/                          # Main package
-│   ├── __init__.py
-│   ├── __main__.py                 # Entry point: python -m llmud
-│   │
-│   ├── client/                     # Telnet layer
-│   │   ├── __init__.py
-│   │   ├── connection.py           # Async telnet connection management
-│   │   ├── protocols.py            # GMCP/MSDP protocol handlers
-│   │   └── ansi.py                 # ANSI code parsing and stripping
-│   │
-│   ├── parser/                     # MUD output parsing
-│   │   ├── __init__.py
-│   │   ├── base.py                 # Parser interface (ABC)
-│   │   ├── classifier.py           # Output type classification
-│   │   ├── generic.py              # Generic MUD parser
-│   │   └── evennia.py              # Evennia-specific parser
-│   │
-│   ├── tui/                        # Terminal UI (Textual)
-│   │   ├── __init__.py
-│   │   ├── app.py                  # Main Textual application
-│   │   ├── mud_pane.py             # MUD output display
-│   │   ├── input_pane.py           # Command input with /slash support
-│   │   ├── llm_pane.py             # LLM status, suggestions, reasoning
-│   │   ├── approval.py             # Accept/reject/retry/edit dialog
-│   │   └── status_bar.py           # Connection, HP, mode indicators
-│   │
-│   ├── llm/                        # LLM provider abstraction
-│   │   ├── __init__.py
-│   │   ├── types.py                # LLMRequest, LLMResponse, Message, Tool models
-│   │   ├── provider.py             # Provider interface (ABC)
-│   │   ├── local.py                # OpenAI-compatible local provider
-│   │   ├── anthropic_provider.py   # Claude API provider
-│   │   ├── openai_provider.py      # OpenAI API provider
-│   │   ├── claude_code.py          # ClaudeCodeProvider: `claude -p` subprocess (subscription tokens)
-│   │   ├── router.py               # Task-type → model routing
-│   │   └── grammar.py              # Custom grammar generation for local models
-│   │
-│   ├── events/                     # Event bus (Phase 1 — enables everything)
-│   │   ├── __init__.py
-│   │   ├── bus.py                  # Async pub/sub event bus
-│   │   ├── types.py                # Typed event models (Pydantic)
-│   │   └── log.py                  # Event persistence to SQLite for replay
-│   │
-│   ├── mcp/                        # MCP server for Claude Code integration
-│   │   ├── __init__.py
-│   │   └── server.py               # MCP server exposing game state, memories, scaffolds
-│   │
-│   ├── engine/                     # Cognitive architecture core
-│   │   ├── __init__.py
-│   │   ├── loop.py                 # Main game loop (orchestrator)
-│   │   ├── fast.py                 # System 1: fast processing, classification, triggers
-│   │   ├── slow.py                 # System 2: deliberative reasoning
-│   │   ├── context.py              # Context assembly (prompt builder)
-│   │   └── actions.py              # Action execution + approval flow
-│   │
-│   ├── goals/                      # Goal management
-│   │   ├── __init__.py
-│   │   ├── manager.py              # Read/write goal document, track state
-│   │   └── process.py              # Goal process scaffold and stuckness detection
-│   │
-│   ├── memory/                     # Memory system
-│   │   ├── __init__.py
-│   │   ├── episodic.py             # Event storage (SQLite)
-│   │   ├── semantic.py             # Knowledge storage (JSON + SQLite)
-│   │   ├── procedural.py           # Scaffold/guide library management
-│   │   ├── retrieval.py            # remember() tool implementation
-│   │   └── consolidation.py        # Memory consolidation (offline)
-│   │
-│   ├── knowledge/                  # Knowledge hierarchy + analysis
-│   │   ├── __init__.py
-│   │   ├── observations.py         # Auto-logging of game events
-│   │   ├── insights.py             # Pattern extraction
-│   │   └── analysis.py             # analyze_events tool (data science)
-│   │
-│   ├── scaffolds/                  # Scaffold system
-│   │   ├── __init__.py
-│   │   ├── loader.py               # Load scaffolds from files
-│   │   ├── registry.py             # Index of all scaffolds with metadata
-│   │   ├── schema.py               # Pydantic models for scaffold format
-│   │   └── defaults/               # Built-in bootstrap scaffolds
-│   │       ├── meta_goals.md       # Goal management process
-│   │       ├── meta_scene.md       # Scene reasoning
-│   │       ├── meta_needs.md       # Basic needs fulfillment
-│   │       └── meta_learning.md    # How to learn from experience
-│   │
-│   ├── social/                     # Social intelligence
-│   │   ├── __init__.py
-│   │   ├── profiles.py             # NPC/player profile storage
-│   │   ├── perception.py           # Emotional state detection, subtext
-│   │   └── personality.py          # Personality scaffold management
-│   │
-│   ├── world/                      # World model (game-specific knowledge)
-│   │   ├── __init__.py
-│   │   ├── state.py                # Current game state (HP, room, inventory)
-│   │   ├── map_graph.py            # Room graph + pathfinding
-│   │   ├── commands.py             # Command reference management
-│   │   └── tracker.py              # State change detection
-│   │
-│   ├── reflection/                 # Reflection & REM
-│   │   ├── __init__.py
-│   │   ├── journal.py              # Session journaling
-│   │   ├── review.py               # Reflection scaffolds (narrative, analytical, etc.)
-│   │   └── rem.py                  # Offline processing orchestrator
-│   │
-│   ├── commands/                   # Slash command system
-│   │   ├── __init__.py
-│   │   ├── registry.py             # Command registry and dispatch
-│   │   ├── ask.py                  # /ask
-│   │   ├── suggest.py              # /suggest
-│   │   ├── auto.py                 # /auto
-│   │   ├── status.py               # /status
-│   │   ├── scaffold_cmd.py         # /scaffold
-│   │   ├── goal_cmd.py             # /goal
-│   │   └── review_cmd.py           # /review
-│   │
-│   ├── tools/                      # Tool definitions for LLM
-│   │   ├── __init__.py
-│   │   ├── registry.py             # Tool registry
-│   │   ├── game_tools.py           # send_command, help
-│   │   ├── memory_tools.py         # remember, learn, analyze_events
-│   │   ├── goal_tools.py           # read_goals, update_goals
-│   │   ├── scaffold_tools.py       # list_guides, read_guide, create_guide
-│   │   ├── world_tools.py          # check_map, note_location
-│   │   └── social_tools.py         # recall_person, update_person
-│   │
-│   └── config/                     # Configuration
-│       ├── __init__.py
-│       ├── settings.py             # Global settings (Pydantic)
-│       └── character.py            # Per-character config (model routing, etc.)
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── conceptmri/         # Existing components
+│   │   │   │   ├── UMAPTrajectory.tsx
+│   │   │   │   ├── SankeyDiagram.tsx
+│   │   │   │   ├── ClusterAnalysis.tsx
+│   │   │   │   └── ProbeResults.tsx
+│   │   │   ├── mud/                # New
+│   │   │   │   ├── MUDPanel.tsx    # xterm.js terminal
+│   │   │   │   ├── AnalysisChannel.tsx
+│   │   │   │   ├── AgentControls.tsx
+│   │   │   │   ├── ScaffoldBrowser.tsx
+│   │   │   │   ├── GoalViewer.tsx
+│   │   │   │   ├── ProposalReview.tsx
+│   │   │   │   └── MUDCreator.tsx  # Host only
+│   │   │   └── shared/
+│   │   │       └── VizPanel.tsx    # Shared trajectory panel
+│   │   │                           # Switches source on room entry
+│   │   ├── hooks/
+│   │   │   ├── useLocalAnalysis.ts
+│   │   │   ├── useMUDConnection.ts
+│   │   │   └── useRoomContext.ts   # Room entry → viz switch
+│   │   └── App.tsx
+│   └── package.json
 │
-├── scaffolds/                      # User scaffold library (per-character directories)
-│   └── _template/                  # Template character scaffold set
-│       ├── cognitive/
-│       │   └── .gitkeep
-│       └── data/
-│           └── .gitkeep
+├── backend/
+│   ├── conceptmri/                 # Existing
+│   │   ├── inference.py            # Em + PyTorch hooks (extended for agent)
+│   │   ├── harmony.py              # Harmony channel parsing
+│   │   ├── umap_pipeline.py        # Manifold fit, projection, bootstrap
+│   │   ├── probes.py
+│   │   └── datasets.py
+│   │
+│   ├── agent/                      # New
+│   │   ├── loop.py
+│   │   ├── assess.py
+│   │   ├── plan.py
+│   │   ├── act.py
+│   │   └── context.py
+│   │
+│   ├── mud/                        # New
+│   │   ├── connection.py           # Async telnet to Evennia
+│   │   ├── parser.py
+│   │   ├── evennia_parser.py
+│   │   └── ansi.py
+│   │
+│   ├── streaming/                  # New
+│   │   ├── mud_stream.py
+│   │   ├── analysis_stream.py
+│   │   ├── coord_stream.py
+│   │   └── room_context.py         # Room entry metadata → viz switch
+│   │
+│   ├── memory/                     # New
+│   │   ├── episodic.py
+│   │   ├── semantic.py
+│   │   ├── retrieval.py
+│   │   └── exporter.py             # Exports JSON for Claude Code
+│   │
+│   ├── scaffolds/                  # New
+│   │   ├── loader.py
+│   │   ├── registry.py
+│   │   ├── schema.py
+│   │   └── defaults/
+│   │       ├── meta_assess.md
+│   │       ├── meta_plan.md
+│   │       ├── meta_goals.md
+│   │       ├── meta_scene.md
+│   │       ├── meta_needs.md
+│   │       └── meta_learning.md
+│   │
+│   ├── social/                     # New
+│   │   ├── profiles.py
+│   │   └── perception.py
+│   │
+│   ├── world/                      # New
+│   │   ├── state.py
+│   │   ├── map_graph.py
+│   │   └── tracker.py
+│   │
+│   ├── reflection/                 # New
+│   │   ├── journal.py
+│   │   └── exporter.py
+│   │
+│   ├── goals/                      # New
+│   │   ├── manager.py              # File lock, stale detection, archiving
+│   │   └── process.py
+│   │
+│   ├── tools/                      # New — LLM tool definitions
+│   │   ├── registry.py
+│   │   ├── game_tools.py
+│   │   ├── memory_tools.py
+│   │   ├── scaffold_tools.py
+│   │   ├── world_tools.py
+│   │   └── social_tools.py
+│   │
+│   ├── events/                     # New
+│   │   ├── bus.py
+│   │   ├── types.py
+│   │   └── log.py
+│   │
+│   └── api/
+│       ├── app.py                  # Main FastAPI app
+│       ├── websocket.py            # WebSocket endpoint
+│       ├── probes.py               # Existing
+│       ├── datasets.py             # Existing
+│       ├── manifolds.py            # New — serve fitted manifolds
+│       ├── agent.py                # New — start/stop/status
+│       ├── scaffolds.py            # New — scaffold browser
+│       ├── proposals.py            # New — proposal review
+│       └── mud_creator.py          # New — world builder (host only)
 │
-├── config/
-│   └── default.yaml                # Default configuration
+├── characters/
+│   ├── _template/
+│   │   ├── config.yaml
+│   │   ├── goals.md
+│   │   ├── goals_archive.md
+│   │   ├── personality.md
+│   │   ├── scaffolds/
+│   │   │   ├── cognitive/
+│   │   │   └── data/
+│   │   ├── semantic/
+│   │   │   └── npcs/
+│   │   ├── proposals/
+│   │   │   ├── semantic/
+│   │   │   └── scaffolds/
+│   │   ├── journals/
+│   │   ├── exports/
+│   │   └── data/
+│   │       └── memory.db
+│   └── .gitignore
 │
-├── data/                           # Runtime data (SQLite DBs, logs)
-│   └── .gitkeep
-│
-├── tests/
-│   ├── conftest.py                 # Shared fixtures
-│   ├── test_connection.py
-│   ├── test_parser.py
-│   ├── test_scaffolds.py
-│   ├── test_memory.py
-│   ├── test_engine.py
-│   ├── test_goals.py
-│   └── test_tools.py
-│
-├── docs/                           # Design documents
+├── docs/
 │   ├── VISION.md
 │   ├── AI_SYSTEM_DESIGN.md
-│   ├── REQUIREMENTS.md
-│   ├── ARCHITECTURE.md (this file)
-│   ├── INDEX.md
-│   ├── CLAUDE_CODE_GUIDE.md
-│   ├── DEV_PROCESS.md
-│   └── research/                   # Research outputs (reference material)
-│       ├── claude_code_patterns.md
-│       ├── tech_stack_review.md
-│       ├── agent_orchestration.md
-│       └── ui_research.md
+│   ├── ARCHITECTURE.md
+│   ├── WORLD_DESIGN.md
+│   ├── INSTITUTION_DESIGN.md
+│   └── CLAUDE_CODE_GUIDE.md
 │
-└── evennia_testworld/              # Evennia test server (separate setup)
-    └── README.md                   # Setup instructions
+└── evennia_testworld/
+    ├── world/
+    │   ├── turn_room.py
+    │   ├── turn_manager.py
+    │   ├── coordinate_relay.py
+    │   ├── observer_room.py
+    │   ├── knowledge_mixin.py
+    │   └── room_metadata.py        # Sends probe context on room entry
+    └── scenarios/
 ```
 
 ---
 
 ## Data Flow
 
-### Main Game Loop
+### Local Analysis Mode
+
+User loads dataset → existing ConceptMRI pipeline → results in existing React components. No change.
+
+### Institute Mode — Room Entry and Viz Switch
 
 ```
-                    ┌──────────────────┐
-                    │  Telnet Client   │
-                    │  (connection.py) │
-                    └────────┬─────────┘
-                             │ raw text + protocol data
-                             ▼
-                    ┌──────────────────┐
-                    │  Parser          │
-                    │  (classifier +   │
-                    │   evennia.py)    │
-                    └────────┬─────────┘
-                             │ ParsedOutput (structured)
-                             ▼
-              ┌──────────────────────────────┐
-              │  Engine: Fast Processing     │
-              │  (fast.py)                   │
-              │  • Update game state         │
-              │  • Check triggers            │
-              │  • Fire reflexes             │
-              │  • Novelty check             │
-              └──────┬────────────┬──────────┘
-                     │            │
-              routine│            │novel/complex
-                     │            ▼
-                     │  ┌──────────────────────┐
-                     │  │  Context Assembly    │
-                     │  │  (context.py)        │
-                     │  │  • State + Goals     │
-                     │  │  • Relevant guides   │
-                     │  │  • Relevant memories │
-                     │  │  • Tools             │
-                     │  └─────────┬────────────┘
-                     │            │ assembled prompt
-                     │            ▼
-                     │  ┌──────────────────────┐
-                     │  │  LLM Router          │
-                     │  │  (router.py)         │
-                     │  │  Task → Model        │
-                     │  └─────────┬────────────┘
-                     │            │ response
-                     │            ▼
-                     │  ┌──────────────────────┐
-                     │  │  Engine: Slow        │
-                     │  │  (slow.py)           │
-                     │  │  • Parse tool calls  │
-                     │  │  • Execute tools     │
-                     │  │  • Determine action  │
-                     │  └─────────┬────────────┘
-                     │            │
-                     └────────────┤
-                                  │ action(s)
-                                  ▼
-                    ┌──────────────────────────┐
-                    │  Action Execution        │
-                    │  (actions.py)            │
-                    │  Auto → execute          │
-                    │  Approval → TUI dialog   │
-                    └────────────┬─────────────┘
-                                 │
-                    ┌────────────▼─────────────┐
-                    │  Logging                 │
-                    │  (observations.py)       │
-                    │  → Episodic memory       │
-                    │  → Session journal       │
-                    └──────────────────────────┘
+Agent or user enters a room
+        │
+        ▼
+evennia_testworld/world/room_metadata.py
+Sends on entry:
+{
+  "event": "room_entered",
+  "probe": "social_stance",
+  "manifold_id": "meadow_001",
+  "feed": "em_live",
+  "poles": ["friend", "enemy"]
+}
+        │
+        ▼
+backend/streaming/room_context.py
+Forwards to frontend via WebSocket
+        │
+        ▼
+frontend/hooks/useRoomContext.ts
+Downloads manifold_id if not cached
+Switches VizPanel to institute live feed
+Updates pole labels
+Subscribes to coordinate stream for this room
 ```
 
-### Offline (REM) Flow — Powered by Claude Code
+### Institute Mode — Live Inference and Streaming
 
 ```
-Session Logs + Episodic Memory
-          │
-          ▼
-┌──────────────────────────────────────────────┐
-│  MCP Server (mcp/server.py)                   │
-│  Exposes: memories, game state, scaffolds,    │
-│  session logs, scaffold effectiveness         │
-└──────────────────┬───────────────────────────┘
-                   │ MCP protocol
-                   ▼
-┌──────────────────────────────────────────────┐
-│  Claude Code (`claude -p`, subscription)      │
-│  Invoked via: manual /reflect, TUI command,   │
-│  or scheduled cron/systemd timer              │
-│                                               │
-│  Runs reflection skills:                      │
-│  ├─→ /reflect → Narrative + Analytical Review │
-│  ├─→ /memory-review → Consolidation           │
-│  ├─→ /scaffold-eval → Effectiveness analysis  │
-│  └─→ /knowledge-mine → Pattern extraction     │
-└──────────────────┬───────────────────────────┘
-                   │ writes back via MCP
-                   ▼
-┌──────────────────────────────────────────────┐
-│  Results                                      │
-│  • Journal entries → journals/                │
-│  • Insights → semantic memory                 │
-│  • Guide change proposals → scaffold library  │
-│  • Meta-insights → scaffold effectiveness DB  │
-└──────────────────────────────────────────────┘
+Tick opens
+        │
+        ▼
+backend/agent/loop.py runs assess → plan → act
+        │
+        ▼
+backend/conceptmri/inference.py
+Runs Em with PyTorch hooks
+Returns: analysis + commentary + final channels
+         + residual stream coordinates
+        │
+        ├─────────────────────────────────┐
+        │ final channel                   │ analysis + coordinates
+        ▼                                 ▼
+backend/mud/connection.py       backend/streaming/
+Submit action to Evennia        Streams to React frontend:
+                                  analysis_stream → analysis pane
+                                  coord_stream → VizPanel
+        │
+        ▼
+Tick resolves — Evennia advances
+        │
+        ▼
+backend/memory/ + events/
+Log everything to disk
+```
+
+### Offline Reflection
+
+```
+Session ends
+        │
+        ▼
+backend/reflection/exporter.py
+Writes to characters/{name}/exports/:
+  session_log.json, episodes.json, scaffold_stats.json
+        │
+        ▼
+Human runs: claude -p "reflect on last session" --bare
+        │
+        ▼
+Claude Code reads exports/ directly
+Writes proposals → characters/{name}/proposals/
+Writes journal → characters/{name}/journals/
+        │
+        ▼
+Proposals visible in frontend ProposalReview component
+Human approves/rejects/edits
 ```
 
 ---
 
-## LLM Provider Architecture
+## WebSocket Protocol
 
-```python
-# Interface (provider.py)
-class LLMProvider(ABC):
-    async def complete(self, request: LLMRequest) -> LLMResponse: ...
-    async def complete_stream(self, request: LLMRequest) -> AsyncIterator[str]: ...
-    def supports_tools(self) -> bool: ...
-    def supports_grammar(self) -> bool: ...
+Backend → Frontend:
 
-# ClaudeCodeProvider (claude_code.py)
-class ClaudeCodeProvider(LLMProvider):
-    """Calls `claude -p` via subprocess. Uses subscription tokens, not API credits.
-    For offline analysis only — not real-time gameplay."""
-
-    async def complete(self, request: LLMRequest) -> LLMResponse:
-        # subprocess.run(["claude", "-p", prompt, "--bare",
-        #     "--output-format", "json", "--max-turns", "5"])
-        ...
-
-# Router (router.py)
-class ModelRouter:
-    """Routes task types to providers based on character config."""
-
-    def route(self, task_type: str) -> LLMProvider:
-        """Look up task_type in config, return configured provider."""
-        # config:
-        #   perception: local/small (fast, free)
-        #   tactics: local/emily (capable, free)
-        #   roleplay: local/emily (capable, free)
-        #   complex_reasoning: anthropic/claude-sonnet (high capability, API credits)
-        #   reflection: claude-code (subscription tokens, offline only)
-        #   memory_consolidation: claude-code (subscription tokens, offline only)
-        #   scaffold_eval: claude-code (subscription tokens, offline only)
-        #   default: local/emily
+```typescript
+{ type: "mud_output", text: string, parsed_type: string }
+{ type: "analysis", text: string, session_id: string }
+{ type: "coordinates", points: [{layer, x, y, z}], token: string,
+  context: string, session_id: string }
+{ type: "room_entered", probe: string, manifold_id: string,
+  feed: string, poles: string[] }
+{ type: "tick_open" | "tick_resolved", room_id: string }
+{ type: "agent_status", phase: "assess"|"plan"|"act"|"idle",
+  reasoning_effort: "low"|"medium"|"high" }
 ```
 
-### Model Strategy
+Frontend → Backend:
 
-| Role | Model | Access | Cost |
-|------|-------|--------|------|
-| Main game agent | gpt-oss-20b ("emily") | Local, OpenAI-compatible API | Free |
-| Fast/routine tasks | Smaller local model (TBD) | Local, OpenAI-compatible API | Free |
-| Complex reasoning | Claude / GPT via API | API calls | Credits (minimize) |
-| Offline analysis | Claude Code (`claude -p`) | Subprocess, subscription tokens | Already paying $100/mo |
-| Interpretability | gpt-oss-20b direct PyTorch | Direct loading with hooks (ConceptMRI) | Free (GPU time) |
-
-### Request Model
-
-```python
-class LLMRequest(BaseModel):
-    task_type: str                  # "perception", "tactics", "roleplay", "reflection", etc.
-    system_prompt: str              # Assembled from personality + role + context
-    messages: list[Message]         # Conversation history
-    tools: list[ToolDef] | None     # Available tool definitions
-    grammar: str | None             # Custom grammar constraint (local models)
-    max_tokens: int = 2048
-    temperature: float = 0.7
+```typescript
+{ type: "command", text: string }
+{ type: "proposal_decision", proposal_id: string,
+  decision: "approve"|"reject"|"edit", edited_content?: string }
+{ type: "switch_feed", session_id: string }
 ```
 
 ---
@@ -403,84 +395,100 @@ class LLMRequest(BaseModel):
 ### Per-Character Directory
 
 ```
-characters/
-└── adventurer_one/
-    ├── config.yaml              # Model routing, preferences
-    ├── goals.md                 # Current goal document
-    ├── personality.md           # Personality scaffold
-    ├── scaffolds/
-    │   ├── cognitive/           # Reasoning guides (markdown)
-    │   │   ├── combat.md
-    │   │   ├── exploration.md
-    │   │   └── social.md
-    │   └── data/                # World knowledge (JSON)
-    │       ├── bestiary.json
-    │       ├── commands.json
-    │       ├── map.json
-    │       ├── npcs.json
-    │       └── prices.json
-    ├── journals/                # Session journals (markdown)
-    │   └── 2026-03-23.md
-    └── data/
-        └── memory.db            # SQLite: episodic, session logs, analytics
+characters/adventurer_one/
+├── config.yaml
+├── goals.md                 # Active (~600 token cap)
+├── goals_archive.md
+├── goals_proposals.md
+├── personality.md
+├── scaffolds/
+│   ├── cognitive/
+│   └── data/
+├── semantic/
+│   └── npcs/
+├── proposals/
+│   ├── semantic/
+│   └── scaffolds/
+├── journals/
+├── exports/                 # Claude Code reads these
+│   ├── session_log.json
+│   ├── episodes.json
+│   └── scaffold_stats.json
+└── data/
+    └── memory.db
 ```
 
 ### SQLite Schema (memory.db)
 
 ```sql
--- Episodic memory
 CREATE TABLE episodes (
     id INTEGER PRIMARY KEY,
     timestamp TEXT NOT NULL,
     location TEXT,
-    event_type TEXT NOT NULL,  -- combat, social, discovery, death, quest, etc.
+    event_type TEXT NOT NULL,
     description TEXT NOT NULL,
     outcome TEXT,
-    entities TEXT,             -- JSON array of involved entities
-    emotional_valence REAL,    -- -1.0 to 1.0
-    session_id TEXT
+    entities TEXT,
+    emotional_valence REAL,
+    session_id TEXT,
+    embedding BLOB
 );
+CREATE INDEX idx_episodes_event_type ON episodes(event_type);
+CREATE INDEX idx_episodes_session ON episodes(session_id);
+CREATE INDEX idx_episodes_timestamp ON episodes(timestamp);
 
--- Session logs (raw)
 CREATE TABLE session_logs (
     id INTEGER PRIMARY KEY,
     timestamp TEXT NOT NULL,
     session_id TEXT NOT NULL,
-    direction TEXT NOT NULL,   -- 'in' (from MUD) or 'out' (to MUD)
+    direction TEXT NOT NULL,
     raw_text TEXT NOT NULL,
-    parsed_type TEXT,          -- room_desc, combat, etc.
-    parsed_data TEXT           -- JSON structured parse result
+    parsed_type TEXT,
+    parsed_data TEXT
 );
 
--- LLM interactions (for interpretability / ConceptMRI replay)
 CREATE TABLE llm_log (
     id INTEGER PRIMARY KEY,
     timestamp TEXT NOT NULL,
     session_id TEXT NOT NULL,
     task_type TEXT NOT NULL,
-    provider TEXT NOT NULL,    -- "local", "anthropic", "openai", "claude_code"
-    model TEXT NOT NULL,
-    prompt_text TEXT,          -- Full prompt sent (for ConceptMRI sentence dump export)
-    response_text TEXT,        -- Full response received
+    reasoning_effort TEXT,
+    prompt_text TEXT,
+    response_analysis TEXT,
+    response_commentary TEXT,
+    response_final TEXT,
+    coordinates TEXT,
     prompt_tokens INTEGER,
     completion_tokens INTEGER,
-    latency_ms INTEGER,        -- Response time
-    prompt_hash TEXT,          -- For deduplication analysis
-    scaffold_versions TEXT,    -- JSON: {"combat": 3, "goals": 5} — scaffold versions active
-    scaffolds_loaded TEXT,     -- JSON array of scaffold names
-    tools_called TEXT,         -- JSON array of tool calls
+    latency_ms INTEGER,
+    prompt_hash TEXT,
+    scaffold_versions TEXT,
+    scaffolds_loaded TEXT,
+    tools_called TEXT,
     action_taken TEXT,
-    outcome TEXT
+    outcome TEXT,
+    user_needs_state TEXT,
+    conflict_flags TEXT
 );
 
--- Map graph
+CREATE TABLE scaffold_effectiveness (
+    id INTEGER PRIMARY KEY,
+    scaffold_name TEXT NOT NULL,
+    scaffold_version INTEGER NOT NULL,
+    session_id TEXT NOT NULL,
+    times_loaded INTEGER DEFAULT 0,
+    outcomes_positive INTEGER DEFAULT 0,
+    outcomes_negative INTEGER DEFAULT 0,
+    notes TEXT
+);
+
 CREATE TABLE rooms (
-    id TEXT PRIMARY KEY,       -- Generated from room name + description hash
+    id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT,
-    exits TEXT NOT NULL,       -- JSON: {"north": "room_id", ...}
-    npcs TEXT,                 -- JSON array
-    items TEXT,                -- JSON array
+    exits TEXT NOT NULL,
+    npcs TEXT,
+    items TEXT,
     notes TEXT,
     danger_level INTEGER DEFAULT 0,
     first_visited TEXT,
@@ -491,44 +499,26 @@ CREATE TABLE rooms (
 
 ---
 
-## UI Architecture
+## MUD Creator (Host Only)
 
-### Hybrid Approach
+The MUD creator panel is disabled by config for regular users. When enabled, it provides a UI for:
+- Defining rooms, objects, NPCs as YAML (per WORLD_DESIGN.md spec)
+- Generating Evennia Python via Claude Code on the backend
+- Loading generated scripts into the running Evennia world
+- Configuring probe/manifold association per room
+- Managing scenario registry and reset
 
-| Interface | Purpose | Tech | Phase |
-|-----------|---------|------|-------|
-| **Textual TUI** | Gameplay — MUD output, commands, LLM panel | Textual + Rich | 1 |
-| **Web Dashboard** | Research management — analytics, scaffold browser, memory explorer | FastAPI + SvelteKit | 3+ |
-
-Both connect through the **event bus + state API**:
-- TUI subscribes to game/agent events for real-time display
-- Dashboard subscribes to the same events for visualization and analysis
-- State API provides read access to game state, memories, scaffolds, and LLM logs
-- Claude Code analysis results flow back through the event bus for both interfaces
-
-The TUI is the primary interface. The web dashboard is an add-on for research workflows — browsing scaffold effectiveness, visualizing memory networks, analyzing LLM decision patterns across sessions.
+Backend receives YAML spec from UI → writes to disk → invokes `claude -p` with spec and Evennia templates → reads back generated Python → loads into Evennia via admin API.
 
 ---
 
 ## Extension Points
 
-### For Future Swarm (Custom Orchestration)
+**For Future Swarm:** agent/context.py — different agents = different context compositions. events/bus.py — already multi-subscriber.
 
-Swarm uses custom Blackboard-Mediated IFS architecture, not third-party frameworks (see AI_SYSTEM_DESIGN.md §14). These interfaces support adding multi-agent without refactoring:
+**For Dual-Model Processing:** conceptmri/inference.py — add fast-model path for assess. agent/assess.py — route to fast model.
 
-1. **`engine/context.py`** — Context assembly is already a separate concern. Different "agents" = different context compositions.
-2. **`tools/registry.py`** — Tool registry can scope tools per agent. Combat agent gets combat tools only.
-3. **`world/state.py`** — Game state is accessed through an interface that could become a shared blackboard.
-4. **`goals/manager.py`** — Goal document could become per-agent or shared.
-5. **`events/bus.py`** — Event bus supports multi-subscriber pattern. Parts subscribe to relevant event types.
-
-### For Plugins
-
-1. **Parser plugins** — Implement `BaseParser` ABC for new MUD types
-2. **Provider plugins** — Implement `LLMProvider` ABC for new LLM services
-3. **Command plugins** — Register new slash commands via `CommandRegistry`
-4. **Scaffold types** — Frontmatter schema is extensible; new scaffold types can define custom fields
-5. **Analysis methods** — New statistical methods can be added to the analysis tool
+**For User-Hosted Instances:** mud_creator.py already isolated, unlock via config flag. Evennia world setup documented in evennia_testworld/README.md.
 
 ---
 
@@ -536,54 +526,60 @@ Swarm uses custom Blackboard-Mediated IFS architecture, not third-party framewor
 
 | Level | What | How |
 |-------|------|-----|
-| **Unit** | Individual modules (parser, memory, scaffolds, router) | pytest, mock LLM responses |
-| **Integration** | Module interactions (engine + parser + memory) | pytest-asyncio, fixture-based |
-| **LLM** | Actual LLM reasoning (does it follow scaffolds?) | Integration tests with real/mock model |
-| **E2E** | Full loop against Evennia | Automated telnet session with scripted scenarios |
-| **Scaffold** | Does a specific scaffold produce desired behavior? | Scenario replay with A/B comparison |
+| Unit | Backend modules | pytest, mock inference |
+| Integration | Agent loop + parser + memory | pytest-asyncio |
+| WebSocket | Stream correctness | pytest-asyncio WebSocket client |
+| E2E | Full loop against Evennia | Automated scripted ticks |
+| Scaffold | Desired behavior? | Scenario replay, A/B |
+| Attractor | Expected failure mode? | Scripted scenarios |
+| Frontend | Components, viz switching | Jest + React Testing Library |
 
 ---
 
 ## Deployment
 
-Local-first. No cloud services required for core functionality.
-
 ```bash
 # Install
-pip install -e .
-# or
 uv pip install -e .
 
-# Run
-python -m llmud --host localhost --port 4000 --character adventurer_one
+# Run backend (GPU desktop)
+uvicorn backend.api.app:app --host 0.0.0.0 --port 8000
 
-# Run offline reflection (via Claude Code)
-claude -p "Run /reflect for adventurer_one last session" --bare
+# Run frontend (dev)
+cd frontend && npm run dev
 
-# Run with specific config
-python -m llmud --config config/custom.yaml
+# Export session for Claude Code
+python -m backend.reflection.exporter --character adventurer_one
+
+# Offline reflection
+claude -p "Read characters/adventurer_one/exports/ and run narrative review.
+Write proposals to characters/adventurer_one/proposals/" --bare
 ```
 
 ---
 
-## Dependency Version Strategy
-
-Pin major+minor, allow patch updates:
+## Dependencies
 
 ```toml
-# pyproject.toml
 [project]
 dependencies = [
-    "textual>=0.50,<1.0",
-    "rich>=13.0,<14.0",
+    # Existing ConceptMRI
+    "fastapi>=0.110,<1.0",
+    "uvicorn>=0.29,<1.0",
     "pydantic>=2.5,<3.0",
     "pydantic-settings>=2.0,<3.0",
+    "torch>=2.0",
+    "transformers>=4.40",
+    "umap-learn>=0.5,<1.0",
+    "numpy>=1.24,<2.0",
+    "pandas>=2.0,<3.0",
+    "scikit-learn>=1.3,<2.0",
+    # New LLMUD additions
     "aiosqlite>=0.19,<1.0",
     "python-frontmatter>=1.0,<2.0",
     "httpx>=0.27,<1.0",
     "anthropic>=0.40,<1.0",
     "telnetlib3>=2.0,<3.0",
+    "openai-harmony>=0.1",
 ]
 ```
-
-Lock exact versions with `uv lock` for reproducibility. Update quarterly unless security patch needed.
