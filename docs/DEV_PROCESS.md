@@ -118,6 +118,8 @@ Summary:
 - Commit frequently with descriptive messages
 - Update docs when implementation reveals design changes
 - Review agents can check code against design docs
+- Run `/session-end` at end of session — includes change propagation check
+- New designs go through `docs/scratchpad/` first, not directly into main docs
 
 ---
 
@@ -130,6 +132,111 @@ Every significant design decision gets recorded in `docs/INDEX.md` under "Key De
 - What alternatives were considered (briefly)
 
 This prevents re-litigating decisions in future sessions while preserving the reasoning for review.
+
+---
+
+## Change Propagation Protocol
+
+### The Rule
+
+Every change to architecture, design, or interfaces must propagate to all affected documents. This is not optional. Stale docs are the #1 source of technical debt in this project.
+
+The compact lookup table lives in `CLAUDE.md` §Change Propagation (loaded every session). This section has the detailed procedure.
+
+### When to Propagate
+
+After EVERY implementation session, before committing, ask:
+1. Did I change a module's public interface?
+2. Did I change a data schema?
+3. Did I change or reverse a design decision?
+4. Did I add or remove a module?
+5. Did I discover the design doc was wrong?
+
+If YES to any: follow the table in `CLAUDE.md` §Change Propagation.
+
+### Detailed Propagation by Change Type
+
+**Module interface change:**
+- Update ARCHITECTURE.md §Module Structure (the tree diagram if structure changed)
+- Update the module's CLAUDE.md (constraints section)
+- Update docstrings in all modules that import from the changed module
+- If the interface change affects a requirement: update REQUIREMENTS.md
+
+**Data schema change:**
+- Update ARCHITECTURE.md §Persistence (SQLite schema, character directory structure)
+- If Pydantic model changed: update ARCHITECTURE.md §Schemas if section exists
+- If WebSocket message changed: update ARCHITECTURE.md §WebSocket Protocol
+- Update REQUIREMENTS.md if it specifies the old schema
+
+**Design decision change:**
+- Update INDEX.md §Key Decisions Made (mark old decision as superseded, add new entry with date)
+- Update CLAUDE.md §Key Design Decisions (the bullet list)
+- Update ALL design docs that reference the old decision (grep for the old decision text)
+- If the change is large: create a scratchpad doc for review before modifying main docs
+
+**New module:**
+- Add to ARCHITECTURE.md §Module Structure tree
+- Add to CLAUDE.md §Conventions (module list)
+- Create module CLAUDE.md from template in CLAUDE_CODE_GUIDE.md
+- Update DEV_PROCESS.md §Phases if it affects phase scope
+
+**Design doc was wrong:**
+- Update the doc immediately, not "later"
+- Add a note at the change site: `*Updated YYYY-MM-DD: changed X to Y because Z*`
+- Check INDEX.md §Cross-References for other docs that reference the changed section
+
+### Verification
+
+After propagation, grep for the old value/name across all docs and module docstrings to catch missed references:
+
+```
+grep -r "old_name" docs/ backend/
+```
+
+---
+
+## Scratchpad Workflow
+
+New architectural proposals and design iterations happen in `docs/scratchpad/`, not directly in the main design documents.
+
+Full rules and template: `docs/scratchpad/README.md`
+
+Summary:
+1. Create scratchpad doc with date-prefixed name and frontmatter template
+2. Iterate across sessions (status: `draft`)
+3. When ready, set status to `review` and ask Emily
+4. Emily approves → promote (merge into target doc, delete scratchpad, update INDEX.md, follow Change Propagation for `affects` docs)
+5. Emily rejects → delete with descriptive commit message (git history preserves it)
+
+This prevents half-baked designs from polluting the main docs and gives Emily a clear approval gate for architectural changes.
+
+---
+
+## Code-Documentation Consistency
+
+### The Two Sources of Truth Problem
+
+Code and docs will diverge unless actively prevented. Our policy:
+
+- **Design docs are the source of truth for WHY and WHAT.**
+- **Code is the source of truth for HOW.**
+- **Code always points back to docs.** Every `__init__.py` cites its design doc section.
+- **Docs never point to specific code lines.** They reference modules and classes by name.
+
+### When They Disagree
+
+If code and doc disagree, the doc is probably wrong (because the code is what actually runs). But this means the doc MUST be updated immediately:
+
+1. Determine whether the deviation was intentional (design evolved during implementation) or accidental (implementation drifted from design)
+2. If intentional: update the doc to match the code, noting the change
+3. If accidental: fix the code to match the doc, or update the doc if the code is better
+4. Either way: follow Change Propagation Protocol for any affected docs
+
+### Module CLAUDE.md Files
+
+Every module directory under `backend/` gets a CLAUDE.md file created from the template in `CLAUDE_CODE_GUIDE.md` §Module CLAUDE.md Template. These are loaded automatically when Claude Code reads files in that directory.
+
+Create module CLAUDE.md files at the same time as their parent directories — not before, not after.
 
 ---
 

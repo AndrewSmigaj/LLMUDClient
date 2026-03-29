@@ -31,14 +31,54 @@ These have been deliberated and decided. Do not re-litigate unless Emily asks. C
 - **Eudaimonic motivation, not Sims meters.** The agent's development framework is grounded in virtue ethics and balanced flourishing, not numeric curiosity/boredom counters.
 - **Design for swarm, implement single agent.** The architecture supports multi-agent (IFS model, context engineering) but we start with one agent.
 - **Scaffold the process, not the content.** Tell the LLM HOW to reason about goals, combat, social situations — not WHAT to do in specific scenarios.
+- **Scientific approach.** Scaffolds are hypotheses. Test them, compare them, iterate. The Evennia world supports rewinding/restarting for experimentation.
+- **ConceptMRI as reference.** When designing modules (especially LLM/analysis/skills), check ConceptMRI for proven patterns. Design fresh — don't copy.
 
-## How to Work on This Project
+## Process Rules
 
-1. **NO CODING until docs are polished.** Document-first development is a hard rule, not a suggestion.
-2. **Don't simplify prematurely.** Emily wants the best possible architecture, not the easiest to build. Dream big in design docs, implement incrementally in code.
-3. **Scientific approach.** Scaffolds are hypotheses. Test them, compare them, iterate. The Evennia world supports rewinding/restarting for experimentation.
-4. **Check docs/ for context.** The design documents capture extensive brainstorming and should be consulted before making architectural decisions.
-5. **ConceptMRI as reference.** When designing modules (especially LLM/analysis/skills), check ConceptMRI for proven patterns. Design fresh — don't copy.
+1. **Document-first.** NO CODING until relevant design docs are polished. If design is missing or vague, write a scratchpad doc first.
+2. **Check docs/ before deciding.** Read design documents before making architectural decisions.
+3. **Change propagation is mandatory.** When anything changes, follow §Change Propagation below.
+4. **Scratchpad for new designs.** New architectural proposals go in `docs/scratchpad/` first, not directly into main docs. Promote only with Emily's approval.
+5. **Code comments reference docs.** Every module docstring cites its design doc section. See §Code Comment Policy.
+6. **Commit after every coherent change.** Small, descriptive commits. Never batch unrelated changes.
+
+## What NOT to Do
+
+- **Don't simplify prematurely.** Emily wants the best architecture, not the easiest to build. LLMUD's value IS the sophisticated architecture.
+- **Don't defer doc updates.** Stale docs are worse than no docs. Update BEFORE moving on.
+- **Don't put design rationale only in code comments.** Rationale lives in design docs; code cites the doc.
+- **Don't create design docs in docs/ directly.** Scratchpad first, promote when approved.
+- **Don't duplicate information across docs.** One canonical location per fact, others cross-reference.
+
+## Change Propagation
+
+When you change any of these, update ALL listed targets:
+
+| Changed | Must update |
+|---------|-------------|
+| Module interface or public API | ARCHITECTURE.md §Module Structure, module CLAUDE.md, calling modules' docstrings |
+| Data schema | ARCHITECTURE.md §Persistence/Schemas, REQUIREMENTS.md if FR/NFR affected |
+| Design decision | INDEX.md §Key Decisions, CLAUDE.md §Key Design Decisions, affected design docs |
+| Adding/removing a module | ARCHITECTURE.md §Module Structure, CLAUDE.md §Conventions, create/remove module CLAUDE.md |
+| Scaffold format or lifecycle | AI_SYSTEM_DESIGN.md §Scaffolds, ARCHITECTURE.md §Persistence |
+| Phase scope | DEV_PROCESS.md §Phases, REQUIREMENTS.md phase column |
+| WebSocket protocol | ARCHITECTURE.md §WebSocket Protocol, frontend types |
+| New design doc or scratchpad promotion | INDEX.md §Documents, CLAUDE.md §Documentation |
+
+After ANY session: ask "Did I change something that affects a design doc?" If yes, update now. Details: `DEV_PROCESS.md` §Change Propagation Protocol.
+
+## Code Comment Policy
+
+| What | Where |
+|------|-------|
+| WHY (design rationale) | Design docs only, cited in module docstring |
+| WHAT (module purpose, public API) | Module docstring (`__init__.py`) |
+| WHAT (class/function behavior) | Class/function docstring |
+| HOW (non-obvious logic) | Inline comments |
+| CONSTRAINTS/INVARIANTS | Inline `# INVARIANT:` comments |
+
+Design docs own WHY. Code owns HOW. Code always points back to docs. Docs never point to specific code lines. Templates: `CLAUDE_CODE_GUIDE.md` §Code Comment Templates.
 
 ## What to Read When
 
@@ -52,6 +92,7 @@ These have been deliberated and decided. Do not re-litigate unless Emily asks. C
 | Working with Claude Code on this project | `CLAUDE_CODE_GUIDE.md` | — |
 | Looking up a specific requirement | `REQUIREMENTS.md` (search by FR-/NFR- ID) | Source design doc for full spec |
 | Checking what was decided and why | `INDEX.md` §Key Decisions Made | — |
+| Proposing a new design | Start a scratchpad doc | `docs/scratchpad/README.md` for template |
 
 ## Documentation
 
@@ -62,8 +103,9 @@ These have been deliberated and decided. Do not re-litigate unless Emily asks. C
 - `docs/INSTITUTION_DESIGN.md` — Public research institution: social architecture, AI scientists, visualization (vision doc)
 - `docs/REQUIREMENTS.md` — Functional and non-functional requirements (FR-/NFR- IDs)
 - `docs/INDEX.md` — Document status, open questions, key decisions (canonical), cross-references
-- `docs/DEV_PROCESS.md` — Implementation phases, testing, collaboration style
-- `docs/CLAUDE_CODE_GUIDE.md` — How to use Claude Code on this project
+- `docs/DEV_PROCESS.md` — Implementation phases, testing, collaboration, change propagation
+- `docs/CLAUDE_CODE_GUIDE.md` — Claude Code usage, module CLAUDE.md template, code comment templates
+- `docs/scratchpad/` — Working architecture documents (see README.md inside for template and rules)
 - `docs/research/` — Pre-decision research artifacts (may reference superseded designs — check main docs for current decisions)
 
 ## Conventions
@@ -72,3 +114,7 @@ These have been deliberated and decided. Do not re-litigate unless Emily asks. C
 - Pydantic for data models and config
 - pytest + pytest-asyncio for testing
 - Module boundaries (under `backend/`): conceptmri, agent, mud, streaming, memory, scaffolds, social, world, reflection, goals, tools, events, api
+
+## Compact Instructions
+
+When compacting, preserve: list of all files modified this session, active task list, key decisions made, test commands, and any unfinished change propagation.

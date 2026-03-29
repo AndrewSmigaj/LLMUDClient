@@ -79,6 +79,16 @@
 | Event bus from Phase 1 | Central async pub/sub. Enables UI, logging, triggers, Claude Code. | 2026-03-24 |
 | Tick-based micro-worlds | Evennia test world uses turn-based rooms for reproducible scenario research | 2026-03-28 |
 
+## Scratchpad Documents
+
+Working architecture proposals in `docs/scratchpad/`. See `docs/scratchpad/README.md` for template and rules.
+
+| Document | Status | Target Doc | Created |
+|----------|--------|-----------|---------|
+| *(none yet)* | | | |
+
+---
+
 ## Cross-References
 
 - VISION.md §Ethics → AI_SYSTEM_DESIGN.md §Research Directions (Motivation and Flourishing)

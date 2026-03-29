@@ -91,8 +91,8 @@ Create these in `.claude/commands/` for project-specific workflows:
 
 | Command | Purpose |
 |---------|---------|
-| `/session-start` | Read CLAUDE.md + memory, report project state, suggest what to work on |
-| `/session-end` | Summarize accomplishments, update memories, check for uncommitted changes |
+| `/session-start` | Read CLAUDE.md + memory, check scratchpad, report project state, suggest work |
+| `/session-end` | Summarize work, check change propagation, commit, suggest next steps |
 | `/design-review <module>` | Compare implementation against design docs, flag deviations |
 | `/explore <topic>` | Launch parallel research agents on a topic, synthesize findings |
 | `/scaffold-test <scaffold>` | Design a test scenario for a scaffold with metrics and controls |
@@ -102,35 +102,99 @@ See `docs/research/claude_code_patterns.md` §13 for full command templates.
 
 ### Development Hooks
 
-Auto-format Python files on Write/Edit via `.claude/settings.json`:
-```json
-{
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Write",
-        "command": "ruff format $CLAUDE_FILE_PATH 2>/dev/null; ruff check --fix $CLAUDE_FILE_PATH 2>/dev/null; true"
-      },
-      {
-        "matcher": "Edit",
-        "command": "ruff format $CLAUDE_FILE_PATH 2>/dev/null; ruff check --fix $CLAUDE_FILE_PATH 2>/dev/null; true"
-      }
-    ]
-  }
-}
+Configured in `.claude/settings.json` (already set up in this repo).
+
+**Active hooks:**
+- Auto-format Python files on Write/Edit via `ruff format` + `ruff check --fix`
+- Silently does nothing on non-Python files
+
+**Future hooks** (add when test suite exists):
+- Run tests after Python file edits
+- Doc staleness check (warn when code changes but corresponding docs haven't been touched)
+
+### Module CLAUDE.md Template
+
+When creating module directories under `backend/`, add a CLAUDE.md with only things an AI can't derive from reading the code. Keep it to 5-10 lines — it's loaded every time Claude reads files in that directory.
+
+**Template:**
+```markdown
+# backend/{module}/ — {Module Display Name}
+
+{1-2 sentences: what this module does and why it matters}
+
+Design: {doc.md §Section}
+
+Constraints:
+- {Things the AI MUST NOT do — the guardrails that prevent streamlining}
 ```
 
-### Module-Level CLAUDE.md Files
-
-When creating module directories, add a brief CLAUDE.md that orients future sessions:
+**Examples:**
 ```
-backend/mud/CLAUDE.md       → "Async telnetlib3. Never block. See ARCHITECTURE.md §Tech Stack."
-backend/scaffolds/CLAUDE.md → "Heart of the project. NEVER simplify. See AI_SYSTEM_DESIGN.md §Scaffolds."
-backend/social/CLAUDE.md    → "Full-depth social intelligence. Do NOT simplify. See AI_SYSTEM_DESIGN.md §NPC and Social Profiles."
-backend/agent/CLAUDE.md     → "Core loop: assess → plan → act. See AI_SYSTEM_DESIGN.md §The Loop."
+backend/scaffolds/CLAUDE.md:
+  "Loads, validates, and discovers cognitive and data scaffolds.
+   Heart of the project — its complexity is intentional.
+   Design: AI_SYSTEM_DESIGN.md §Scaffolds
+   Constraints:
+   - NEVER simplify the scaffold system
+   - NEVER change frontmatter schema without updating AI_SYSTEM_DESIGN.md"
+
+backend/agent/CLAUDE.md:
+  "Core cognitive loop: assess → plan → act → learn.
+   Design: AI_SYSTEM_DESIGN.md §The Loop
+   Constraints:
+   - All four phases must run in order
+   - Reasoning effort is set by the assess phase, not hardcoded"
+
+backend/mud/CLAUDE.md:
+  "Async telnet connection to MUDs via telnetlib3.
+   Design: ARCHITECTURE.md §Tech Stack
+   Constraints:
+   - NEVER block the event loop — all I/O is async
+   - Handle reconnection with backoff (FR-NET-04)"
 ```
 
-These are loaded when Claude reads files in that directory, providing instant context.
+**Why only constraints, not public interface or dependencies?** Those are derivable from the code. Putting them in CLAUDE.md creates a staleness risk — the exact problem we're solving. The Key Constraints section is the high-value part: it prevents the AI from streamlining away intentional complexity.
+
+Create module CLAUDE.md files at the same time as their parent directories, not before.
+
+### Code Comment Templates
+
+Code comments tell you WHAT and HOW. Design docs tell you WHY. Full policy in `CLAUDE.md` §Code Comment Policy.
+
+**Module docstring (`__init__.py`):**
+```python
+"""LLMUD Scaffold System.
+
+Loads, validates, and manages cognitive and data scaffolds.
+
+Design: docs/AI_SYSTEM_DESIGN.md §Scaffolds
+Architecture: docs/ARCHITECTURE.md §Module Structure (backend/scaffolds/)
+Requirements: FR-SCAFFOLD-01 through FR-SCAFFOLD-04
+"""
+```
+
+**Class docstring:**
+```python
+class ScaffoldLoader:
+    """Loads scaffolds from the character's scaffold directory.
+
+    Reads Markdown+YAML cognitive scaffolds and JSON data scaffolds.
+    Validates frontmatter against ScaffoldSchema.
+
+    See: AI_SYSTEM_DESIGN.md §Scaffolds (format, lifecycle, discovery)
+    """
+```
+
+**Inline comment conventions** (grep-searchable prefixes):
+```python
+# INVARIANT: goals.md must remain under 600 tokens.
+# See AI_SYSTEM_DESIGN.md §Goals for the rationale.
+
+# WORKAROUND: telnetlib3 v2.0.4 drops the first IAC response.
+# Track: https://github.com/.../issues/123
+
+# NOTE: O(n^2) comparison — scaffold count expected under 50.
+```
 
 ---
 
